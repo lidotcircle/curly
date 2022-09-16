@@ -1,0 +1,61 @@
+name: Test
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v[0-9]+.[0-9]
+
+jobs:
+  BuildAndTestUbuntu:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: install packages
+        run: sudo apt-get install -y cmake clang
+
+      - name: Release Build
+        run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
+
+      - name: Release Test
+        run: cd build && ctest
+
+      - name: Debug Build
+        run: rm -rf build && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make
+
+      - name: Debug Test
+        run: cd build && ctest
+
+  BuildAndTestWindows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Release Build
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
+          nmake
+
+      - name: Release Test
+        run: cd build && ctest
+
+      - name: Debug Build
+        run: |
+          mkdir build_debug
+          cd build_debug
+          cmake -DCMAKE_BUILD_TYPE=Debug -G "NMake Makefiles" ..
+          nmake
+
+      - name: Debug Test
+        run: cd build_debug && ctest
