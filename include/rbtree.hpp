@@ -1,11 +1,12 @@
 #pragma once
-#include <vector>
-#include <algorithm>
 #include <utility>
 #include <iterator>
 #include <type_traits>
+#include <memory>
+#include <stdexcept>
 using namespace std;
 
+// TODO just for development
 #define DEBUG 1
 
 #ifdef DEBUG
@@ -28,17 +29,6 @@ struct RBTreeValue {
     template<typename Kx, typename Vx>
     RBTreeValue(Kx&& k, Vx&& v): first(std::forward<Kx>(k)), second(std::forward<Vx>(v)) {}
 };
-template<typename K>
-struct RBTreeValue<K, void> {
-    const K first;
-
-    inline bool operator<(const RBTreeValue<K, void>& o) const { return this->first < o.first; }
-    inline bool operator==(const RBTreeValue<K, void>& o) const { return this->first == o.first; }
-
-    template<typename Kx, std::enable_if_t<std::is_same<std::remove_reference_t<std::remove_const_t<Kx>>,K>::value, bool> = true>
-    RBTreeValue(Kx&& k): first(std::forward<Kx>(k)) {}
-};
-
 
 template<typename S>
 struct RBTreeNode {
@@ -85,29 +75,71 @@ struct RBTreeNode {
     {}
 
     ~RBTreeNode() {
-        if (this->left) {
-            delete this->left;
-            this->left = nullptr;
-        }
-
-        if (this->right) {
-            delete this->right;
-            this->right = nullptr;
-        }
+        RB_ASSERT(this->left == nullptr);
+        RB_ASSERT(this->right == nullptr);
     }
 };
 
-template<typename S, bool multi, typename Compare = std::less<S>>
+#if __cplusplus >= 201703L
+template<typename _Key, typename _Value>
+using rbtree_storage_type = typename std::conditional<std::is_same<_Value,void>::value,_Key,std::pair<const _Key, _Value>>::type;
+template<typename _Key, typename _Value>
+using rbtree_compare_type = _Key;
+#else
+template<typename _Key, typename _Value>
+using rbtree_storage_type = typename std::conditional<std::is_same<_Value,void>::value,_Key,RBTreeValue<_Key,_Value>>::type;
+template<typename _Key, typename _Value>
+using rbtree_compare_type = rbtree_storage_type<_Key,_Value>;
+#endif // __cplusplus >= 201703L
+
+template<
+    typename _Key, typename _Value, bool multi,
+    typename Compare = std::less<rbtree_compare_type<_Key,_Value>>,
+    typename Alloc = std::allocator<RBTreeNode<rbtree_storage_type<_Key,_Value>>>>
 class RBTreeImpl {
     public:
-        using storage_type = S;
+        using storage_type = rbtree_storage_type<_Key,_Value>;
         using node_type = RBTreeNode<storage_type>;
+#if __cplusplus >= 202002L
+        using storage_allocator_ = std::allocator_traits<Alloc>::rebind_alloc<node_type>;
+#else
+        using storage_allocator_ = typename Alloc::template rebind<node_type>::other;
+#endif // __cplusplus >= 202002L
 
     private:
         node_type* root;
         Compare cmp;
+        storage_allocator_ allocator;
+        size_t _version;
 
-        inline bool comp(const storage_type& a, const storage_type& b) const { return this->cmp(a, b); }
+        template<typename St>
+        inline node_type* construct_node(St&& val) {
+            auto ptr = this->allocator.allocate(1);
+            return new (ptr) node_type(std::forward<St>(val));
+        }
+
+        inline void delete_node(node_type* node) {
+#if __cplusplus >= 201703L
+            std::destroy_n(node, 1);
+            this->allocator.deallocate(node, 1);
+#else
+            node->~node_type();
+            this->allocator.deallocate(node, 1);
+#endif // __cplusplus >= 201703L
+        }
+
+        inline bool comp(const storage_type& a, const storage_type& b) const
+        {
+#if __cplusplus >= 201703L
+            if constexpr (std::is_same<_Value,void>::value) {
+                return this->cmp(a, b);
+            } else {
+                return this->cmp(a.first, b.first);
+            }
+#else
+            return this->cmp(a, b);
+#endif // __cplusplus >= 201703L
+        }
 
         inline void update_num_nodes(node_type* node, node_type* end) const
         {
@@ -514,16 +546,21 @@ class RBTreeImpl {
 
     public:
         template<typename Sx>
-        void insert(Sx&& val)
+        std::pair<node_type*,bool> insert(node_type* hint, Sx&& val)
         {
-            auto node = new node_type(std::forward<Sx>(val));
+            this->_version++;
+            auto node = this->construct_node(std::forward<Sx>(val));
             if (this->root == nullptr) {
                 this->root = node;
                 this->root->black = true;
-                return;
+                return std::make_pair(this->root, true);
             }
 
             auto cn = this->root;
+            if (hint != nullptr) {
+                // TODO
+            }
+
             for(;;) {
                 if (this->comp(node->value, cn->value)) {
                     if (cn->left == nullptr) {
@@ -535,8 +572,8 @@ class RBTreeImpl {
                     }
                 } else if (!multi && node->value == cn->value) {
                     cn->value = std::move(node->value);
-                    delete node;
-                    return;
+                    this->delete_node(node);
+                    return std::make_pair(cn, false);
                 } else {
                     if (cn->right == nullptr) {
                         cn->right = node;
@@ -553,6 +590,12 @@ class RBTreeImpl {
             } else {
                 this->fix_redred(node);
             }
+            return std::make_pair(node, true);
+        }
+
+        template<typename Sx>
+        std::pair<node_type*,bool> insert(Sx&& val) {
+            return this->insert(nullptr, std::forward<Sx>(val));
         }
 
 #ifdef DEBUG
@@ -603,6 +646,7 @@ class RBTreeImpl {
             node_type* extra_black = nullptr;
             node_type* extra_parent = nullptr;
             bool extra_is_left_child = true;
+            this->_version++;
 
             if (node->left && node->right) {
                 auto successor = this->minimum(node->right);
@@ -665,7 +709,7 @@ class RBTreeImpl {
             }
             node->left = nullptr;
             node->right = nullptr;
-            delete node;
+            this->delete_node(node);
 
             if (this->root != nullptr) {
                 RB_ASSERT(this->root->parent == nullptr);
@@ -759,10 +803,13 @@ class RBTreeImpl {
             return this->minimum(this->root);
         }
 
-        node_type* advance(node_type* node, long n) {
+        // TODO prototype
+        node_type* advance(node_type* node, long n) const {
+            // node == nullptr represent end
             if (node == nullptr) {
+                // TODO why this->root (shoud be const qualified) can assign to node
                 node = this->root;
-                n += node->right ? node->right->num_nodes + 1 : 1;
+                n += node && node->right ? node->right->num_nodes + 1 : 1;
             }
 
             for (;n!=0 && node!=nullptr;) {
@@ -820,88 +867,356 @@ class RBTreeImpl {
             return this->root ? this->root->num_nodes : 0;
         }
 
-        RBTreeImpl(): root(nullptr) {
+        inline size_t version() const {
+            return this->_version;
+        }
+
+        void copy_to(RBTreeImpl& target) const {
+            target.~RBTreeImpl();
+            target._version++;
+            if (!this->root) return;
+
+            // preorder traversing
+            node_type* parent_node = nullptr;
+            node_type** pptr = &target.root;
+            for (const node_type* node=this->root;node!=nullptr;) {
+                auto val = node->value;
+                node_type* new_node = target.construct_node(val);
+                new_node->black = node->black;;
+                new_node->parent = parent_node;
+                new_node->num_nodes = node->num_nodes;
+                *pptr = new_node;
+
+                if (node->left) {
+                    node = node->left;
+                    parent_node = new_node;
+                    pptr = &parent_node->left;
+                    continue;
+                }
+
+                if (node->right) {
+                    node = node->right;
+                    parent_node = new_node;
+                    pptr = &parent_node->right;
+                    continue;
+                }
+
+                pptr = nullptr;
+                for (;node && node->parent;) {
+                    auto old_node = node;
+                    node = node->parent;
+                    RB_ASSERT(parent_node);
+
+                    if (node->left == old_node && node->right) {
+                        node = node->right;
+                        pptr = &parent_node->right;
+                        break;
+                    } else {
+                        parent_node = parent_node->parent;
+                    }
+                }
+                RB_ASSERT(pptr != nullptr || node == this->root);
+                if (node == this->root) {
+                    break;
+                }
+            }
+        }
+
+        void clear() {
+            if (!this->root) return;
+
+            for(auto node=this->root;node!=nullptr;) {
+                if (node->left) {
+                    node = node->left;
+                } else if (node->right) {
+                    node = node->right;
+                } else {
+                    auto deadnode = node;
+                    node = node->parent;
+                    if (node) {
+                        if (node->left == deadnode) {
+                            node->left = nullptr;
+                        } else {
+                            RB_ASSERT(node->right == deadnode);
+                            node->right = nullptr;
+                        }
+                    }
+                    this->delete_node(deadnode);
+                }
+            }
+            this->root = nullptr;
+            this->_version++;
+        }
+
+        RBTreeImpl(): root(nullptr), _version(0) {
         }
 
         ~RBTreeImpl() {
-            if (this->root) {
-                delete this->root;
-                this->root = nullptr;
-            }
+            this->clear();
         }
 };
 
+// TODO just for making intellisense work in development
+template class RBTreeImpl<int,void,true>;
 
-template class RBTreeImpl<RBTreeValue<int,void>,false>;
-template class RBTreeImpl<RBTreeValue<int,void>,true>;
+template<typename T>
+struct IsRBTreeImpl : std::false_type {};
+template<typename T1, typename T2, bool V1, typename T4, typename T5>
+struct IsRBTreeImpl<RBTreeImpl<T1,T2,V1,T4,T5>> : std::true_type {};
 
-
-template<typename S, bool multi, typename Compare>
-class RBTreeImplIter {
+template<bool reverse, bool const_iterator, typename RBTreeType, typename = std::enable_if<IsRBTreeImpl<RBTreeType>::value>>
+class RBTreeImplIterator {
     public:
-        using rbtree_t = RBTreeImpl<S, multi, Compare>;
+        using rbtree_t = RBTreeType;
         using storage_type = typename rbtree_t::storage_type;
         using node_type = typename rbtree_t::node_type;
+
         using iterator_category = std::bidirectional_iterator_tag;
         using value_type = storage_type;
         using difference_type = long;
         using pointer = value_type*;
-        using reference = value_type&;
+        using reference = typename std::conditional<const_iterator, const value_type&, value_type&>::type;
+        using const_reference = const value_type&;
 
     private:
-        rbtree_t* tree;
+        std::weak_ptr<rbtree_t> tree;
         node_type* node;
+        size_t version;
+
+        std::shared_ptr<rbtree_t> check_version() const {
+            auto tree = this->tree.lock();
+            if (!tree) {
+                throw std::logic_error("access invalid iterator");
+            }
+
+            if (tree->version() != this->version) {
+            }
+
+            return tree;
+        }
 
     public:
-        storage_type* operator->() {
-            // TODO
+        const pointer operator->() const {
+            this->check_version();
+            if (this->node == nullptr) {
+                throw std::out_of_range("dereference end of a container");
+            }
             return &node->value;
         }
 
-        reference operator*() const {
-            // TODO
+        pointer operator->() {
+            this->check_version();
+            if (this->node == nullptr) {
+                throw std::out_of_range("dereference end of a container");
+            }
+            return &node->value;
+        }
+
+        const_reference operator*() const {
+            this->check_version();
+            if (this->node == nullptr) {
+                throw std::out_of_range("dereference end of a container");
+            }
             return node->value;
         }
 
-        reference operator*() {
-            // TODO
+        reference& operator*() {
+            this->check_version();
+            if (this->node == nullptr) {
+                throw std::out_of_range("dereference end of a container");
+            }
             return node->value;
         }
 
-        RBTreeImplIter& operator++() {
+        RBTreeImplIterator& operator++() {
+            auto tree = this->check_version();
+            if (this->node == nullptr) {
+                throw std::out_of_range("increment end iterator");
+            }
+
+            this->node = tree->advance(this->node, reverse ? -1 : 1);
+            return *this;
         }
 
-        RBTreeImplIter operator++(int) {
+        RBTreeImplIterator operator++(int) {
             auto ans = *this;
             this->operator++();
             return ans;
         }
 
-        RBTreeImplIter& operator--() {
+        RBTreeImplIterator& operator--() {
+            auto tree = this->check_version();
+            if (reverse && this->node == nullptr && tree->size() > 0) {
+                this->node = tree->begin();
+                return *this;
+            }
+
+            auto dec = tree->advance(this->node, reverse ? 1 : -1);
+            if (dec == nullptr) {
+                throw std::out_of_range("decrement begin iterator");
+            } else {
+                this->node = dec;
+            }
         }
 
-        RBTreeImplIter operator--(int) {
+        RBTreeImplIterator operator--(int) {
             auto ans = *this;
             this->operator--();
             return ans;
         }
 
-        RBTreeImplIter operator+(int n) {
+        RBTreeImplIterator& operator+=(int n) {
+            auto tree = this->check_version();
+            if (n == 0) return *this;
+
+            if (reverse && this->node == nullptr && n < 0 && tree->size() > 0) {
+                this->node = tree->begin();
+                n += 1;
+            }
+
+            auto m = tree->advance(this->node, reverse ? -n : n);
+            if (m == nullptr) {
+                throw std::out_of_range("out of range by adding '" + std::to_string(n) + "'");
+            }
         }
 
-        RBTreeImplIter operator-(int n) {
+        RBTreeImplIterator& operator-=(int n) {
+            return this->operator+=(-n);
         }
 
-        bool operator==(const RBTreeImplIter& oth) const {
-            return oth.tree == this->tree && oth.node == this->node;
+        RBTreeImplIterator operator+(int n) const {
+            auto ans = *this;
+            return ans.operator+=(n);
         }
 
-        bool operator!=(const RBTreeImplIter& oth) const {
+        RBTreeImplIterator operator-(int n) const {
+            auto ans = *this;
+            return ans.operator-=(n);
+        }
+
+        bool operator==(const RBTreeImplIterator& oth) const {
+            auto t1 = this->check_version(), t2 = oth.check_version();
+            return t1 == t2 && oth.node == this->node;
+        }
+
+        bool operator!=(const RBTreeImplIterator& oth) const {
             return !this->operator==(oth);
         }
 
-        bool operator<(const RBTreeImplIter& oth) const {
-            // TODO
-            return oth.tree == this->tree && oth.node == this->node;
+        bool operator<(const RBTreeImplIterator& oth) const {
+            auto t1 = this->check_version(), t2 = oth.check_version();
+            if (t1 != t2) {
+                throw std::logic_error("it's invalid to compare iterators from different container");
+            }
+            const auto idx1 = t1->indexof(this->node), idx2 = t1->indexof(oth.node);
+            return reverse ? idx1 > idx2 :  idx1 < idx2;
         }
+
+        bool operator>(const RBTreeImplIterator& oth) const {
+            auto t1 = this->check_version(), t2 = oth.check_version();
+            if (t1 != t2) {
+                throw std::logic_error("it's invalid to compare iterators from different container");
+            }
+            const auto idx1 = t1->indexof(this->node), idx2 = t1->indexof(oth.node);
+            return reverse ? idx1 < idx2 :  idx1 > idx2;
+        }
+
+        inline bool operator<=(const RBTreeImplIterator& oth) const {
+            return oth.operator>(*this);
+        }
+
+        inline bool operator>=(const RBTreeImplIterator& oth) const {
+            return oth.operator<(*this);
+        }
+
+        RBTreeImplIterator(std::weak_ptr<rbtree_t> tree, node_type* node): tree(tree), node(node) {}
 };
+
+
+namespace std {
+    // TODO
+    template<bool reverse, bool const_iterator, typename RBTreeType>
+    typename std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type
+    distance(RBTreeImplIterator<reverse,const_iterator,RBTreeType> iter1, RBTreeImplIterator<reverse,const_iterator,RBTreeType> iter2) {
+        return 0;
+    }
+}
+
+
+template<
+    typename _Key, bool multi,
+    typename Compare = std::less<rbtree_compare_type<_Key,void>>,
+    typename Alloc = std::allocator<RBTreeNode<rbtree_storage_type<_Key,void>>>>
+class generic_set {
+    private:
+        using rbtree_t = RBTreeImpl<_Key,void,multi,Compare,Alloc>;
+        using iterator_t = RBTreeImplIterator<false,false,rbtree_t>;
+        using const_iterator_t = RBTreeImplIterator<false,true,rbtree_t>;
+        using reverse_iterator_t = RBTreeImplIterator<true,false,rbtree_t>;
+        using reverse_const_iterator_t = RBTreeImplIterator<true,true,rbtree_t>;
+        std::shared_ptr<rbtree_t> rbtree;
+
+    public:
+        generic_set(): rbtree(std::make_shared<rbtree_t>()) {}
+        generic_set(const generic_set& oth): rbtree(std::make_shared<rbtree_t>())
+        {
+            oth.rbtree->copy_to(*this->rbtree);
+        }
+        generic_set(generic_set&& oth): rbtree(oth.rbtree)
+        {
+            oth.rbtree =std::make_shared<rbtree_t>();
+        }
+
+        generic_set& operator=(const generic_set& oth) {
+            oth.rbtree->copy_to(*this->rbtree);
+            return *this;
+        }
+        generic_set& operator=(generic_set&& oth) {
+            this->rbtree->clear();
+            // TODO increment version
+            std::swap(this->rbtree, oth.rbtree);
+            return *this;
+        }
+
+        inline iterator_t begin() { return iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline iterator_t end() { return iterator_t(this->rbtree, nullptr); }
+
+        inline const_iterator_t begin() const { return const_iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline const_iterator_t end() const { return const_iterator_t(this->rbtree, nullptr); }
+
+        inline const_iterator_t cbegin() const { return const_iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline const_iterator_t cend() const { return const_iterator_t(this->rbtree, nullptr); }
+
+        inline reverse_iterator_t rbegin() { return reverse_iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline reverse_iterator_t rend() { return reverse_iterator_t(this->rbtree, nullptr); }
+
+        inline reverse_const_iterator_t rbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline reverse_const_iterator_t rend() const { return reverse_const_iterator_t(this->rbtree, nullptr); }
+
+        inline size_t size() const { return this->rbtree->size(); }
+
+        template<typename ValType>
+        std::pair<iterator_t,bool> insert(ValType&& val)
+        {
+            auto result = this->rbtree->insert(std::forward<ValType>(val));
+            return make_pair(iterator_t(this->rbtree, result.first), result.second);
+        };
+};
+
+
+template<
+    typename _Key,
+    typename Compare = std::less<rbtree_compare_type<_Key,void>>,
+    typename Alloc = std::allocator<RBTreeNode<rbtree_storage_type<_Key,void>>>>
+using set2 = generic_set<_Key,false,Compare,Alloc>;
+
+template<
+    typename _Key,
+    typename Compare = std::less<rbtree_compare_type<_Key,void>>,
+    typename Alloc = std::allocator<RBTreeNode<rbtree_storage_type<_Key,void>>>>
+using multiset2 = generic_set<_Key,true,Compare,Alloc>;
+
+
+// TODO just for making intellisense work in development
+template class generic_set<int, true>;
+

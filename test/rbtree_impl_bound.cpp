@@ -11,8 +11,8 @@ using namespace std;
 
 std::default_random_engine generator;
 static void bound_test(const size_t n_vals) {
-    RBTreeImpl<int, false> tree;
-    RBTreeImpl<int, true> tree_multi;
+    RBTreeImpl<int, void, false> tree;
+    RBTreeImpl<int, void, true> tree_multi;
     std::uniform_int_distribution<int> distribution(-n_vals*3,n_vals);
 
     std::set<int> snnn;
@@ -43,7 +43,6 @@ static void bound_test(const size_t n_vals) {
         auto tmub = tree_multi.upper_bound(val);
         auto vlb = std::lower_bound(vnnn.begin(), vnnn.end(), val);
         auto vub = std::upper_bound(vnnn.begin(), vnnn.end(), val);
-
 
         ASSERT_EQ(tree.indexof(tlb), std::distance(snnn.begin(), slb));
         ASSERT_EQ(tree.indexof(tub), std::distance(snnn.begin(), sub));

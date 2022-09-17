@@ -11,7 +11,7 @@ using namespace std;
 
 std::default_random_engine generator;
 static void remove_test(const size_t n_vals) {
-    RBTreeImpl<int, true> tree_multi;
+    RBTreeImpl<int, void, true> tree_multi;
     std::uniform_int_distribution<int> distribution(-n_vals*3,n_vals*3);
     const size_t freq = n_vals / 8 > 0 ? n_vals / 8 : 1;
 

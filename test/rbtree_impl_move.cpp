@@ -12,7 +12,7 @@ using namespace std;
 std::default_random_engine generator;
 static void move_test(const size_t n_vals)
 {
-    RBTreeImpl<int, true> tree_multi;
+    RBTreeImpl<int, void, true> tree_multi;
     std::uniform_int_distribution<int> distribution(-100000,100000);
 
     for (size_t i=0;i<n_vals;i++) {

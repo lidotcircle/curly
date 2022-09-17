@@ -11,8 +11,8 @@ using namespace std;
 
 std::default_random_engine generator;
 static void insert_test(const size_t n_vals) {
-    RBTreeImpl<int, false> tree;
-    RBTreeImpl<int, true> tree_multi;
+    RBTreeImpl<int, void, false> tree;
+    RBTreeImpl<int, void, true> tree_multi, tree_multi2;
 
     ASSERT_EQ(tree.size(), 0);
     ASSERT_EQ(tree_multi.size(), 0);
@@ -40,6 +40,16 @@ static void insert_test(const size_t n_vals) {
         ASSERT_EQ(tree_multi.size(), vnnn.size());
     }
 
+    tree_multi.copy_to(tree_multi2);
+    ASSERT_EQ(tree_multi.size(), tree_multi2.size());
+    tree_multi2.check_consistency();
+    auto b1=tree_multi.begin(),b2=tree_multi2.begin();
+    for (;b1!=nullptr;b1=tree_multi.advance(b1,1),b2=tree_multi2.advance(b2,1)) {
+        ASSERT_EQ(b1->value, b2->value);
+        ASSERT_EQ(b1->black, b2->black);
+        ASSERT_EQ(b1->num_nodes, b2->num_nodes);
+    }
+    ASSERT_EQ(b2, nullptr);
 
     auto vp = tree.begin();
     auto v = vp->value;
