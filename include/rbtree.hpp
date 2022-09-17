@@ -558,7 +558,42 @@ class RBTreeImpl {
 
             auto cn = this->root;
             if (hint != nullptr) {
-                // TODO
+                bool left_is_ok = false, right_is_ok = false;
+                auto left_node = hint, right_node = hint;
+
+                for (;(!left_is_ok && left_node) || (!right_is_ok && right_node);) {
+                    if (!left_is_ok && left_node) {
+                        if (this->comp(left_node->value, val)) {
+                            left_is_ok = true;
+                        } else {
+                            left_node = left_node->left;
+                        }
+                    }
+
+                    if (!right_is_ok && right_node) {
+                        if (this->comp(val, right_node->value)) {
+                            right_is_ok = true;
+                        } else {
+                            right_node = right_node->right;
+                        }
+                    }
+                }
+
+                for (auto tp=hint->parent;(!left_is_ok || !right_is_ok) && tp;tp=tp->parent) {
+                    if (!left_is_ok && this->comp(tp->value, val)) {
+                        hint = tp;
+                        left_is_ok = true;
+                    }
+
+                    if (!right_is_ok && this->comp(val, tp->value)) {
+                        hint = tp;
+                        right_is_ok = true;
+                    }
+                }
+
+                if (left_is_ok && right_is_ok) {
+                    cn = hint;
+                }
             }
 
             for(;;) {

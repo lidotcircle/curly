@@ -21,16 +21,16 @@ jobs:
         run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
 
       - name: Release Test
-        run: cd build && ctest
+        run: cd build/test && ctest
 
       - name: Memory Leak Detection
-        run: cd build && for f in $(ls | grep '^test[^.]*$'); do echo "$f" &&  eval "valgrind ./$f" || exit 1; done
+        run: cd build/test && for f in $(ls | grep '^test[^.]*$'); do echo "$f" &&  eval "valgrind ./$f" || exit 1; done
 
       - name: Debug Build
         run: rm -rf build && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make
 
       - name: Debug Test
-        run: cd build && ctest
+        run: cd build/test && ctest
 
   BuildAndTestWindows:
     runs-on: windows-latest
@@ -51,7 +51,7 @@ jobs:
           nmake
 
       - name: Release Test
-        run: cd build && ctest
+        run: cd build/test && ctest
 
       - name: Debug Build
         run: |
@@ -61,4 +61,4 @@ jobs:
           nmake
 
       - name: Debug Test
-        run: cd build_debug && ctest
+        run: cd build_debug/test && ctest
