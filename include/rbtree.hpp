@@ -675,7 +675,7 @@ class RBTreeImpl {
         }
 #endif // DEBUG
 
-        void erase(node_type* node)
+        node_type* erase(node_type* node, bool return_next_node)
         {
             RB_ASSERT(node != nullptr);
             node_type* extra_black = nullptr;
@@ -683,9 +683,14 @@ class RBTreeImpl {
             bool extra_is_left_child = true;
             this->_version++;
 
+            node_type* next_node = nullptr;
+
             if (node->left && node->right) {
                 auto successor = this->minimum(node->right);
                 RB_ASSERT(successor != nullptr);
+                if (return_next_node) {
+                    next_node = successor;
+                }
 
                 if (node == this->root) {
                     RB_ASSERT(node->parent == nullptr);
@@ -693,6 +698,8 @@ class RBTreeImpl {
                 }
 
                 this->swap_node(successor, node);
+            } else if (return_next_node) {
+                next_node = this->advance(node, 1);
             }
             const auto node_parent = node->parent;
 
@@ -757,6 +764,8 @@ class RBTreeImpl {
                     this->fix_delete(extra_parent, extra_black, extra_is_left_child);
                 }
             }
+
+            return next_node;
         }
 
         size_t indexof(const node_type* node) const {
@@ -824,6 +833,16 @@ class RBTreeImpl {
             }
 
             return ans;
+        }
+
+        node_type* find(const storage_type& val) {
+            auto node = this->lower_bound(val);
+            return node->value == val ? node : nullptr;
+        }
+
+        const node_type* find(const storage_type& val) const {
+            auto node = this->lower_bound(val);
+            return node->value == val ? node : nullptr;
         }
 
         node_type* begin() {
@@ -1031,6 +1050,9 @@ class RBTreeImplIterator {
         }
 
     public:
+        // TODO
+        node_type* nodeptr() { return this->node; }
+
         const pointer operator->() const {
             this->check_version();
             if (this->node == nullptr) {
@@ -1228,6 +1250,19 @@ class generic_set {
         inline reverse_const_iterator_t rbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->begin()); }
         inline reverse_const_iterator_t rend() const { return reverse_const_iterator_t(this->rbtree, nullptr); }
 
+        inline reverse_const_iterator_t crbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->begin()); }
+        inline reverse_const_iterator_t crend() const { return reverse_const_iterator_t(this->rbtree, nullptr); }
+
+        iterator_t find(const _Key& key) {
+            auto node = this->rbtree->find(key);
+            return iterator_t(this->rbtree, node);
+        }
+
+        const_iterator_t find(const _Key& key) const {
+            auto node = this->rbtree->find(key);
+            return const_iterator_t(this->rbtree, node);
+        }
+
         inline size_t size() const { return this->rbtree->size(); }
 
         template<typename ValType>
@@ -1236,6 +1271,38 @@ class generic_set {
             auto result = this->rbtree->insert(std::forward<ValType>(val));
             return make_pair(iterator_t(this->rbtree, result.first), result.second);
         };
+
+        template<typename ValType>
+        iterator_t insert(iterator_t hint, ValType&& val)
+        {
+            // TODO check iterator
+            auto result = this->rbtree->insert(hint.nodeptr(), std::forward<ValType>(val));
+            return iterator_t(this->rbtree, result.first);
+        };
+
+        iterator_t erase(iterator_t pos) {
+            // TODO check iterator
+            auto  node= pos.nodeptr();
+            if (node == nullptr) {
+                throw std::logic_error("erase end iterator");
+            }
+            auto next_ptr = this->rbtree->erase(node, true);
+            return iterator_t(this->rbtree, next_ptr);
+        }
+
+        iterator_t erase(const_iterator_t pos) {
+            // TODO check iterator
+            auto  node= pos.nodeptr();
+            if (node == nullptr) {
+                throw std::logic_error("erase end iterator");
+            }
+            auto next_ptr = this->rbtree->erase(node, true);
+            return iterator_t(this->rbtree, next_ptr);
+        }
+
+        void clear() {
+            this->rbtree->clear();
+        }
 };
 
 

@@ -1,0 +1,17 @@
+file(GLOB BM_FILES_CPP "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+file(GLOB BM_FILES_CX  "${CMAKE_CURRENT_LIST_DIR}/*.cx")
+file(GLOB BM_FILES     "${CMAKE_CURRENT_LIST_DIR}/*.c")
+list(APPEND BM_FILES ${BM_FILES_CPP} ${BM_FILES_CX})
+foreach (bm_file IN LISTS BM_FILES)
+    get_filename_component(filenamewe ${bm_file} NAME_WE)
+    string(CONCAT execname "benchmark_" ${filenamewe})
+
+    add_executable(${execname} ${bm_file})
+    set_property(TARGET ${execname} PROPERTY CXX_STANDARD 17)
+    target_link_libraries(${execname} PRIVATE benchmark::benchmark curly)
+
+    # Link Shlwapi to the project
+    if ("${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
+        target_link_libraries(${execname} Shlwapi)
+    endif()
+endforeach()
