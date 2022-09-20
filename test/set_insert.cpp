@@ -29,7 +29,7 @@ static void insert_test(const size_t n_vals) {
     }
 }
 
-TEST(rbtree_impl, insert) {
+TEST(set, insert) {
     for (size_t i=1;i<=100;i++) {
         insert_test(i);
         insert_test(i * 10);

@@ -47,7 +47,7 @@ static void insert_test(const size_t n_vals) {
     for (;b1!=nullptr;b1=tree_multi.advance(b1,1),b2=tree_multi2.advance(b2,1)) {
         ASSERT_EQ(b1->value, b2->value);
         ASSERT_EQ(b1->black, b2->black);
-        ASSERT_EQ(b1->num_nodes, b2->num_nodes);
+        ASSERT_EQ(b1->num_of_nodes(), b2->num_of_nodes());
     }
     ASSERT_EQ(b2, nullptr);
 
