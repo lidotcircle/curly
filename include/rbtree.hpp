@@ -36,6 +36,8 @@ struct RBTreeNodeBasic {
 public:
     using storage_type = S;
     using nodeptr_t = N;
+    using node_type = typename std::remove_pointer<nodeptr_t>::type;
+    using const_nodeptr_t = const node_type*;
 
 public:
     inline nodeptr_t minimum() {
@@ -45,7 +47,7 @@ public:
         return node;
     }
 
-    inline const nodeptr_t minimum() const {
+    inline const_nodeptr_t minimum() const {
         return const_cast<RBTreeNodeBasic*>(this)->minimum();
     }
 
@@ -56,7 +58,7 @@ public:
         return node;
     }
 
-    inline const nodeptr_t maximum() const {
+    inline const_nodeptr_t maximum() const {
         return const_cast<RBTreeNodeBasic*>(this)->maximum();
     }
 
@@ -74,7 +76,7 @@ public:
         return node;
     }
 
-    inline const nodeptr_t next() const {
+    inline const_nodeptr_t next() const {
         return const_cast<RBTreeNodeBasic*>(this)->next();
     }
 
@@ -92,7 +94,7 @@ public:
         return node;
     }
 
-    inline const nodeptr_t prev() const {
+    inline const_nodeptr_t prev() const {
         return const_cast<RBTreeNodeBasic*>(this)->prev();
     }
 
@@ -102,7 +104,7 @@ public:
         return node;
     }
 
-    inline const nodeptr_t root() const {
+    inline const_nodeptr_t root() const {
         return const_cast<RBTreeNodeBasic*>(this)->root();
     }
 
@@ -168,7 +170,7 @@ public:
         throw std::logic_error("not implement");
     }
 
-    const nodeptr_t advance(long n) const {
+    const_nodeptr_t advance(long n) const {
         return const_cast<RBTreeNodeBasic*>(this)->advance(n);
     }
 
@@ -226,6 +228,7 @@ public:
     using base_type = RBTreeNodeBasic<S,RBTreeNodePosInfo<S>*>;
     using storage_type = typename base_type::storage_type;
     using nodeptr_t = typename base_type::nodeptr_t;
+    using const_nodeptr_t = typename base_type::const_nodeptr_t;
 
     inline size_t num_of_left_children() const {
         return this->left ? this->left->num_of_nodes() : 0;
@@ -251,7 +254,7 @@ public:
         }
     }
 
-    const nodeptr_t advance(long n) const {
+    const_nodeptr_t advance(long n) const {
         return const_cast<RBTreeNodePosInfo*>(this)->advance(n);
     }
 
@@ -345,6 +348,8 @@ using rbtree_compare_type = rbtree_storage_type<_Key,_Value>;
 
 template<typename S, bool keep_position_info>
 using node_pointer = typename std::conditional<keep_position_info,RBTreeNodePosInfo<S>,RBTreeNode<S>>::type::nodeptr_t;
+template<typename S, bool keep_position_info>
+using const_node_pointer = typename std::conditional<keep_position_info,RBTreeNodePosInfo<S>,RBTreeNode<S>>::type::const_nodeptr_t;
 
 template<typename _Key, typename _Value>
 using default_compare_t = std::less<rbtree_compare_type<_Key,_Value>>;
@@ -359,6 +364,7 @@ class RBTreeImpl {
     public:
         using storage_type = rbtree_storage_type<_Key,_Value>;
         using nodeptr_t = node_pointer<storage_type,keep_position_info>;
+        using const_nodeptr_t = const_node_pointer<storage_type,keep_position_info>;
         using node_type = typename std::remove_pointer<nodeptr_t>::type;
         constexpr static bool PositionInformation = keep_position_info;
 #if __cplusplus >= 202002L
@@ -798,6 +804,10 @@ class RBTreeImpl {
         }
 
     public:
+        void touch() {
+            this->_size++;
+        }
+
         template<typename Sx>
         std::pair<nodeptr_t,bool> insert(nodeptr_t hint, Sx&& val)
         {
@@ -1029,7 +1039,7 @@ class RBTreeImpl {
             return next_node;
         }
 
-        size_t indexof(const nodeptr_t node) const {
+        size_t indexof(nodeptr_t node) const {
             size_t ans = 0;
             if (node == nullptr)
                 return this->size();
@@ -1085,7 +1095,7 @@ class RBTreeImpl {
             return node->value == val ? node : nullptr;
         }
 
-        const nodeptr_t find(const storage_type& val) const {
+        const_nodeptr_t find(const storage_type& val) const {
             auto node = this->lower_bound(val);
             return node->value == val ? node : nullptr;
         }
@@ -1096,7 +1106,7 @@ class RBTreeImpl {
             return this->minimum(this->root);
         }
 
-        const nodeptr_t begin() const {
+        const_nodeptr_t begin() const {
             if (!this->root) return nullptr;
 
             return this->minimum(this->root);
@@ -1221,9 +1231,10 @@ class RBTreeImplIterator {
     public:
         using rbtree_t = RBTreeType;
         using storage_type = typename rbtree_t::storage_type;
-        using node_type = typename rbtree_t::node_type;
+        using nodeptr_t = typename rbtree_t::nodeptr_t;
+        using const_nodeptr_t = typename rbtree_t::const_nodeptr_t;
 
-        using iterator_category = std::bidirectional_iterator_tag;
+        using iterator_category = typename std::conditional<RBTreeType::PositionInformation, std::random_access_iterator_tag, std::bidirectional_iterator_tag>::type;
         using value_type = storage_type;
         using difference_type = long;
         using pointer = value_type*;
@@ -1232,7 +1243,7 @@ class RBTreeImplIterator {
 
     private:
         std::weak_ptr<rbtree_t> tree;
-        node_type* node;
+        nodeptr_t node;
         size_t version;
 
         std::shared_ptr<rbtree_t> check_version() const {
@@ -1248,9 +1259,8 @@ class RBTreeImplIterator {
         }
 
     public:
-        // TODO
-        const node_type* nodeptr() const { return this->node; }
-        node_type* nodeptr() { return this->node; }
+        const_nodeptr_t nodeptr() const { return this->node; }
+        nodeptr_t nodeptr() { return this->node; }
         ptrdiff_t treeid() const { return reinterpret_cast<std::ptrdiff_t>(this->tree.lock().get()); }
 
         size_t indexof() const {
@@ -1287,12 +1297,22 @@ class RBTreeImplIterator {
             return node->value;
         }
 
-        reference& operator*() {
+        reference operator*() {
             this->check_version();
             if (this->node == nullptr) {
                 throw std::out_of_range("dereference end of a container");
             }
             return node->value;
+        }
+
+        const_reference operator[](difference_type n) const {
+            auto val = this->operator+(n);
+            return *val;
+        }
+
+        reference operator[](difference_type n) {
+            auto val = this->operator+(n);
+            return *val;
         }
 
         RBTreeImplIterator& operator++() {
@@ -1355,22 +1375,22 @@ class RBTreeImplIterator {
             return *this;
         }
 
-        RBTreeImplIterator& operator-=(int n) {
+        RBTreeImplIterator& operator-=(difference_type n) {
             return this->operator+=(-n);
         }
 
-        RBTreeImplIterator operator+(int n) const {
+        RBTreeImplIterator operator+(difference_type n) const {
             auto ans = *this;
             return ans.operator+=(n);
         }
 
-        RBTreeImplIterator operator-(int n) const {
+        RBTreeImplIterator operator-(difference_type n) const {
             auto ans = *this;
             return ans.operator-=(n);
         }
 
-        std::ptrdiff_t operator-(RBTreeImplIterator iter) const {
-            std::ptrdiff_t idx1 = this->indexof(), idx2 = iter.indexof();
+        difference_type operator-(RBTreeImplIterator iter) const {
+            difference_type idx1 = this->indexof(), idx2 = iter.indexof();
             return idx1 - idx2;
         }
 
@@ -1409,8 +1429,18 @@ class RBTreeImplIterator {
             return oth.operator<(*this);
         }
 
-        RBTreeImplIterator(std::weak_ptr<rbtree_t> tree, node_type* node, size_t version): tree(tree), node(node), version(version) {}
+        RBTreeImplIterator(std::weak_ptr<rbtree_t> tree, nodeptr_t node, size_t version): tree(tree), node(node), version(version) {}
 };
+
+
+template<bool reverse, bool const_iterator, typename RBTreeType, typename = std::enable_if<IsRBTreeImpl<RBTreeType>::value>>
+RBTreeImplIterator<reverse,const_iterator,RBTreeType> 
+operator+(
+        typename  std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type n,
+        RBTreeImplIterator<reverse,const_iterator,RBTreeType> iter)
+{
+    return iter + n;
+}
 
 
 template<
@@ -1443,8 +1473,9 @@ class generic_set {
         }
         generic_set& operator=(generic_set&& oth) {
             this->rbtree->clear();
-            // TODO increment version
             std::swap(this->rbtree, oth.rbtree);
+            this->rbtree->touch();
+            oth.rbtree->touch();
             return *this;
         }
 
@@ -1572,33 +1603,6 @@ template<
     typename Alloc = default_allocato_t<_Key,void>>
 using pmultiset = generic_set<_Key,true,true,Compare,Alloc>;
 
-
-template<bool reverse, bool const_iterator, typename RBTreeType>
-typename std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type
-distance(RBTreeImplIterator<reverse,const_iterator,RBTreeType> iter1, RBTreeImplIterator<reverse,const_iterator,RBTreeType> iter2) {
-    if (iter1.treeid() != iter2.treeid()) {
-        throw std::logic_error("compare iterators of different container");
-    }
-
-    if (RBTreeType::PositionInformation) {
-        using diff_t = typename std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type;
-        diff_t idx1 = iter1.indexof();
-        diff_t idx2 = iter2.indexof();
-
-        if (idx2 < idx1) {
-            throw std::logic_error("expect iterator1 can reach interator2 by incrementing itself");
-        }
-        return idx2 - idx1;;
-    } else {
-        long ans = 0;
-        for (;bool(iter1) && iter1 != iter2;iter1++, ans++);
-
-        if (!bool(iter1) && bool(iter2)) {
-            throw std::logic_error("expect iterator1 can reach interator2 by incrementing itself");
-        }
-        return ans;
-    }
-}
 
 // TODO just for making intellisense work in development
 template class generic_set<int, true, true>;
