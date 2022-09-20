@@ -3,10 +3,11 @@
 #include <set>
 #include <iostream>
 #include <random>
-#include <assert.h>
+#include <stdexcept>
 
 
 #define MIN_AB(a, b) ((a) > (b) ? (b) : (a))
+#define T_ASSERT(expr) if (!(expr)) { benchmark::DoNotOptimize(expr); throw std::logic_error("assert failure"); }
 
 #define BM_func(func, cls) \
 BENCHMARK_TEMPLATE1(func, cls)->Arg(10); \
@@ -14,7 +15,6 @@ BENCHMARK_TEMPLATE1(func, cls)->Arg(100); \
 BENCHMARK_TEMPLATE1(func, cls)->Arg(1000); \
 BENCHMARK_TEMPLATE1(func, cls)->Arg(10000); \
 BENCHMARK_TEMPLATE1(func, cls)->Arg(100000); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(500000); \
 BENCHMARK_TEMPLATE1(func, cls)->Arg(1000000)
 
 
@@ -28,22 +28,19 @@ void BM_random_move(benchmark::State& state) {
         st.insert(val);
     }
 
+    std::uniform_int_distribution<size_t> dist(0,n_vals);
     for (auto _: state) {
-        S vals = st;
-        std::uniform_int_distribution<size_t> dist(0,n_vals);
-
         auto mval = dist(generator);
         mval %= (st.size() + 1);
         auto it = st.begin();
         if constexpr (std::is_same_v<S,std::set<size_t>>) {
             auto i2 = it;
             for(size_t k=0;k<mval;k++, i2++);
-            if (i2 != st.end())
-                assert(*i2 == mval);
+            T_ASSERT(i2 == st.end() || *i2 == mval);
         } else {
-            auto i2 = it + mval;
-            if (i2 != st.end())
-                assert(*i2 == mval);
+            auto i2 = it;
+            i2 = it + mval;
+            T_ASSERT(i2 == st.end() || *i2 == mval);
         }
     }
 }
@@ -63,13 +60,18 @@ void BM_random_value_position(benchmark::State& state) {
         st.insert(val);
     }
 
+    size_t ans = 0;
     for (auto _: state) {
-        S vals = st;
-
-        auto mval = dist(generator);
-        auto it = st.lower_bound(mval);
-        auto dis = distance(st.begin(), it);
+        auto val1 = dist(generator);
+        auto val2 = dist(generator);
+        if (val1 > val2) std::swap(val1, val2);
+        auto it1 = st.lower_bound(val1);
+        auto it2 = st.lower_bound(val2);
+        auto dis =  distance(it1, it2);
+        ans += dis;
+        T_ASSERT(dis >= 0);
     }
+    benchmark::DoNotOptimize(ans);
 }
 BM_func(BM_random_value_position, std::set<size_t>);
 BM_func(BM_random_value_position, set2<size_t>);
@@ -87,10 +89,8 @@ void BM_random_move_dis(benchmark::State& state) {
         st.insert(val);
     }
 
+    std::uniform_int_distribution<size_t> dist(0,n_vals);
     for (auto _: state) {
-        S vals = st;
-        std::uniform_int_distribution<size_t> dist(0,n_vals);
-
         auto mval = dist(generator);
         mval %= (st.size() + 1);
         auto it = st.begin();
@@ -98,11 +98,11 @@ void BM_random_move_dis(benchmark::State& state) {
             auto i2 = it;
             for(size_t k=0;k<mval;k++, i2++);
             auto dis = distance(it, i2);
-            assert(mval == dis);
+            T_ASSERT(mval == dis);
         } else {
             auto i2 = it + mval;
             auto dis = distance(it, i2);
-            assert(mval == dis);
+            T_ASSERT(mval == dis);
         }
     }
 }
