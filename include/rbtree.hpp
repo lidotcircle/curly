@@ -20,17 +20,165 @@
 #endif
 
 
+template<typename T1, typename T2>
+struct is_same_value_type:
+    std::is_same<
+        std::remove_reference_t<std::remove_const_t<std::remove_reference_t<T1>>>,
+        std::remove_reference_t<std::remove_const_t<std::remove_reference_t<T2>>>
+    > {};
+
 template<typename K, typename V>
-struct RBTreeValue {
-    const K first;
-    V second;
+struct RBTreeValueKV: public std::pair<const K,V> {
+public:
+    using storage_type = std::pair<const K,V>;
 
-    inline bool operator<(const RBTreeValue<K, V>& o) const { return this->first < o.first; }
-    inline bool operator==(const RBTreeValue<K, V>& o) const { return this->first == o.first; }
+    RBTreeValueKV() = delete;
 
-    template<typename Kx, typename Vx>
-    RBTreeValue(Kx&& k, Vx&& v): first(std::forward<Kx>(k)), second(std::forward<Vx>(v)) {}
+    template<typename T, std::enable_if_t<!is_same_value_type<T,RBTreeValueKV>::value,bool> = true>
+    RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
+
+    template<typename T1, typename T2>
+    RBTreeValueKV(T1&& v1, T2&& v2): std::pair<const K,V>(std::forward<T1>(v1), std::forward<T2>(v2)) {}
+
+    RBTreeValueKV(const RBTreeValueKV&) = default;
+    RBTreeValueKV(RBTreeValueKV&&) = default;
+
+    RBTreeValueKV& assign_value(const RBTreeValueKV& oth) {
+        RB_ASSERT(this->first == oth.first);
+        this->second = oth.second;
+        return *this;
+    }
+    RBTreeValueKV& assign_value(RBTreeValueKV&& oth) {
+        RB_ASSERT(this->first == oth.first);
+        this->second = std::move(oth.second);
+        return *this;
+    }
+
+    RBTreeValueKV& operator=(const RBTreeValueKV&) = delete;
+    RBTreeValueKV& operator=(RBTreeValueKV&&) = delete;
+    bool operator==(const RBTreeValueKV&) = delete;
+
+    const storage_type& get() const {
+        return *this;
+    }
+
+    storage_type& get() {
+        return *this;
+    }
 };
+template<typename T>
+struct IsRBTreeValueKV: std::false_type {};
+template<typename K, typename V>
+struct IsRBTreeValueKV<RBTreeValueKV<K,V>>: std::true_type {};
+
+
+template<typename K>
+struct RBTreeValueK {
+public:
+    const K key;
+    using storage_type = const K;
+
+    RBTreeValueK() = delete;
+    template<typename T, std::enable_if_t<is_same_value_type<T,K>::value,bool> = true>
+    RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
+
+    template<typename T1, typename T2>
+    RBTreeValueK(T1&& k, T2&& v2): key(std::forward<T1>(k), std::forward<T2>(v2)) {}
+
+    template<typename T1, typename T2, typename ... Args>
+    RBTreeValueK(T1&& k, T2&& v2, Args ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
+
+    RBTreeValueK(const RBTreeValueK&) = default;
+    RBTreeValueK(RBTreeValueK&&) = default;
+
+    RBTreeValueK& assign_value(const RBTreeValueK& oth) {
+        RB_ASSERT(this->key == oth.key);
+        return *this;
+    }
+    RBTreeValueK& assign_value(RBTreeValueK&& oth) {
+        RB_ASSERT(this->key == oth.key);
+        return *this;
+    }
+
+    RBTreeValueK& operator=(const RBTreeValueK&) = delete;
+    RBTreeValueK& operator=(RBTreeValueK&&) = delete;
+    bool operator==(const RBTreeValueK&) = delete;
+
+    storage_type& get() const {
+        return this->key;
+    }
+};
+template<typename T>
+struct IsRBTreeValueK: std::false_type {};
+template<typename K>
+struct IsRBTreeValueK<RBTreeValueK<K>>: std::true_type {};
+
+
+template<typename T, typename Compare, typename std::enable_if<IsRBTreeValueKV<T>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T& v1, const T& v2) {
+    return cmp(v1.first,v2.first);
+}
+template<
+    typename T1, typename T2, typename Compare,
+    typename std::enable_if<IsRBTreeValueKV<T1>::value && !IsRBTreeValueKV<T2>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
+    return cmp(v1.first,v2);
+}
+template<
+    typename T1, typename T2, typename Compare,
+    typename std::enable_if<!IsRBTreeValueKV<T1>::value && IsRBTreeValueKV<T2>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
+    return cmp(v1,v2.first);
+}
+template<typename T, typename Compare, typename std::enable_if<IsRBTreeValueK<T>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T& v1, const T& v2) {
+    return cmp(v1.key,v2.key);
+}
+template<
+    typename T1, typename T2, typename Compare,
+    typename std::enable_if<IsRBTreeValueK<T1>::value && !IsRBTreeValueK<T2>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
+    return cmp(v1.key,v2);
+}
+template<
+    typename T1, typename T2, typename Compare,
+    typename std::enable_if<!IsRBTreeValueK<T1>::value && IsRBTreeValueK<T2>::value,bool>::type = true>
+inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
+    return cmp(v1,v2.key);
+}
+template<typename T, typename std::enable_if<IsRBTreeValueKV<T>::value,bool>::type = true>
+inline bool rbvalue_equal(const T& v1, const T& v2) {
+    return v1.first == v2.first;
+}
+template<
+    typename T1, typename T2,
+    typename std::enable_if<IsRBTreeValueKV<T1>::value && !IsRBTreeValueKV<T2>::value,bool>::type = true>
+inline bool rbvalue_equal(const T1& v1, const T2& v2) {
+    return v1.first == v2;
+}
+template<
+    typename T1, typename T2,
+    typename std::enable_if<!IsRBTreeValueKV<T1>::value && IsRBTreeValueKV<T2>::value,bool>::type = true>
+inline bool rbvalue_equal(const T1& v1, const T2& v2) {
+    return v1 == v2.first;
+}
+template<typename T, typename std::enable_if<IsRBTreeValueK<T>::value,bool>::type = true>
+inline bool rbvalue_equal(const T& v1, const T& v2) {
+    return v1.key == v2.key;
+}
+template<
+    typename T1, typename T2,
+    typename std::enable_if<IsRBTreeValueK<T1>::value && !IsRBTreeValueK<T2>::value,bool>::type = true>
+inline bool rbvalue_equal(const T1& v1, const T2& v2) {
+    return v1.key == v2;
+}
+template<
+    typename T1, typename T2,
+    typename std::enable_if<!IsRBTreeValueK<T1>::value && IsRBTreeValueK<T2>::value,bool>::type = true>
+inline bool rbvalue_equal(const T1& v1, const T2& v2) {
+    return v1 == v2.key;
+}
+
 
 template<typename S, typename N>
 struct RBTreeNodeBasic {
@@ -199,7 +347,7 @@ public:
         return i;
     }
 
-    template<typename St, std::enable_if_t<std::is_same<std::remove_const_t<std::remove_reference_t<St>>,storage_type>::value, bool> = true>
+    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNodeBasic>::value, bool> = true>
     RBTreeNodeBasic(St&& val):
         left(nullptr), right(nullptr), parent(nullptr),
         black(false), value(std::forward<St>(val))
@@ -215,9 +363,8 @@ template<typename S>
 struct RBTreeNode: public RBTreeNodeBasic<S,RBTreeNode<S>*> {
     using base_type = RBTreeNodeBasic<S,RBTreeNode<S>*>;
 
-    template<typename St, std::enable_if_t<std::is_same<std::remove_const_t<std::remove_reference_t<St>>,S>::value, bool> = true>
+    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNode>::value, bool> = true>
     RBTreeNode(St&& val): base_type(std::forward<St>(val)) {}
-
 };
 
 template<typename S>
@@ -330,36 +477,29 @@ public:
         return ans;
     }
 
-    template<typename St, std::enable_if_t<std::is_same<std::remove_const_t<std::remove_reference_t<St>>,storage_type>::value, bool> = true>
+    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNodePosInfo>::value, bool> = true>
     RBTreeNodePosInfo(St&& val): base_type(std::forward<St>(val)), num_nodes(1) {}
 };
 
 
-#if __cplusplus >= 201703L
 template<typename _Key, typename _Value>
-using rbtree_storage_type = typename std::conditional<std::is_same<_Value,void>::value,_Key,std::pair<const _Key, _Value>>::type;
+using rbtree_storage_type = typename std::conditional<std::is_same<_Value,void>::value,RBTreeValueK<_Key>, RBTreeValueKV<_Key,_Value>>::type;
 template<typename _Key, typename _Value>
 using rbtree_compare_type = _Key;
-#else
-template<typename _Key, typename _Value>
-using rbtree_storage_type = typename std::conditional<std::is_same<_Value,void>::value,_Key,RBTreeValue<_Key,_Value>>::type;
-template<typename _Key, typename _Value>
-using rbtree_compare_type = rbtree_storage_type<_Key,_Value>;
-#endif // __cplusplus >= 201703L
 
 template<typename S, bool keep_position_info>
 using node_pointer = typename std::conditional<keep_position_info,RBTreeNodePosInfo<S>,RBTreeNode<S>>::type::nodeptr_t;
 template<typename S, bool keep_position_info>
 using const_node_pointer = typename std::conditional<keep_position_info,RBTreeNodePosInfo<S>,RBTreeNode<S>>::type::const_nodeptr_t;
 
-template<typename _Key, typename _Value>
-using default_compare_t = std::less<rbtree_compare_type<_Key,_Value>>;
+template<typename _Key>
+using default_compare_t = std::less<_Key>;
 template<typename _Key, typename _Value>
 using default_allocato_t = std::allocator<RBTreeNode<rbtree_storage_type<_Key,_Value>>>;
 
 template<
     typename _Key, typename _Value, bool multi, bool keep_position_info=true,
-    typename Compare = default_compare_t<_Key,_Value>,
+    typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,_Value>>
 class RBTreeImpl {
     public:
@@ -383,7 +523,7 @@ class RBTreeImpl {
         template<typename ... Args>
         inline nodeptr_t construct_node(Args&& ... args) {
             auto ptr = this->allocator.allocate(1);
-            return new (ptr) node_type(std::forward<Args...>(args...));
+            return new (ptr) node_type(std::forward<Args>(args)...);
         }
 
         inline void delete_node(nodeptr_t node) {
@@ -396,17 +536,16 @@ class RBTreeImpl {
 #endif // __cplusplus >= 201703L
         }
 
-        inline bool comp(const storage_type& a, const storage_type& b) const
+        template<typename T1, typename T2>
+        inline bool rb_comp(const T1& a, const T2& b) const
         {
-#if __cplusplus >= 201703L
-            if constexpr (std::is_same<_Value,void>::value) {
-                return this->cmp(a, b);
-            } else {
-                return this->cmp(a.first, b.first);
-            }
-#else
-            return this->cmp(a, b);
-#endif // __cplusplus >= 201703L
+            return rbvalue_compare(this->cmp, a, b);
+        }
+
+        template<typename T1, typename T2>
+        inline bool rb_equal(const T1& a, const T2& b) const
+        {
+            return rbvalue_equal(a, b);
         }
 
         inline void update_num_nodes(nodeptr_t node, nodeptr_t end) const
@@ -806,7 +945,7 @@ class RBTreeImpl {
 
     public:
         void touch() {
-            this->_size++;
+            this->_version++;
         }
 
         template<typename Sx>
@@ -818,7 +957,7 @@ class RBTreeImpl {
         std::pair<nodeptr_t,bool> emplace(nodeptr_t hint, Args&& ...args)
         {
             this->_version++;
-            auto node = this->construct_node(std::forward<Args...>(args...));
+            auto node = this->construct_node(std::forward<Args>(args)...);
             const auto& val = node->value;
             if (this->root == nullptr) {
                 this->root = node;
@@ -835,7 +974,7 @@ class RBTreeImpl {
 
                 for (;(!left_is_ok && left_node) || (!right_is_ok && right_node);) {
                     if (!left_is_ok && left_node) {
-                        if (this->comp(left_node->value, val)) {
+                        if (this->rb_comp(left_node->value, val)) {
                             left_is_ok = true;
                         } else {
                             left_node = left_node->left;
@@ -843,7 +982,7 @@ class RBTreeImpl {
                     }
 
                     if (!right_is_ok && right_node) {
-                        if (this->comp(val, right_node->value)) {
+                        if (this->rb_comp(val, right_node->value)) {
                             right_is_ok = true;
                         } else {
                             right_node = right_node->right;
@@ -852,12 +991,12 @@ class RBTreeImpl {
                 }
 
                 for (auto tp=hint->parent;(!left_is_ok || !right_is_ok) && tp;tp=tp->parent) {
-                    if (!left_is_ok && this->comp(tp->value, val)) {
+                    if (!left_is_ok && this->rb_comp(tp->value, val)) {
                         hint = tp;
                         left_is_ok = true;
                     }
 
-                    if (!right_is_ok && this->comp(val, tp->value)) {
+                    if (!right_is_ok && this->rb_comp(val, tp->value)) {
                         hint = tp;
                         right_is_ok = true;
                     }
@@ -869,7 +1008,7 @@ class RBTreeImpl {
             }
 
             for(;;) {
-                if (this->comp(node->value, cn->value)) {
+                if (this->rb_comp(node->value, cn->value)) {
                     if (cn->left == nullptr) {
                         cn->left = node;
                         node->parent = cn;
@@ -877,8 +1016,8 @@ class RBTreeImpl {
                     } else {
                         cn = cn->left;
                     }
-                } else if (!multi && node->value == cn->value) {
-                    cn->value = std::move(node->value);
+                } else if (!multi && this->rb_equal(node->value, cn->value)) {
+                    cn->value.assign_value(std::move(node->value));
                     this->delete_node(node);
                     return std::make_pair(cn, false);
                 } else {
@@ -935,12 +1074,12 @@ class RBTreeImpl {
 
                 if (node->left) {
                     RB_ASSERT(node->left->parent == node);
-                    RB_ASSERT(this->comp(node->left->value, node->value) || (multi && node->left->value == node->value));
+                    RB_ASSERT(this->rb_comp(node->left->value, node->value) || (multi && this->rb_equal(node->left->value, node->value)));
                     queue.push(std::make_pair(node->left, bdepth));
                 }
                 if (node->right) {
                     RB_ASSERT(node->right->parent == node);
-                    RB_ASSERT(!this->comp(node->right->value, node->value) || (multi && node->right->value == node->value));
+                    RB_ASSERT(!this->rb_comp(node->right->value, node->value) || (multi && this->rb_equal(node->right->value, node->value)));
                     queue.push(std::make_pair(node->right, bdepth));
                 }
 
@@ -1059,11 +1198,9 @@ class RBTreeImpl {
             nodeptr_t ans = nullptr;
             if (!root) return ans;
 
-            auto comp = [this](const storage_type& a, const storage_type& b) { return !this->comp(b, a); };
-
             for (auto node=root;node!=nullptr;) {
-                if (comp(val, node->value)) {
-                    if (ans == nullptr || comp(node->value, ans->value) || node->value == ans->value) {
+                if (!this->rb_comp(node->value, val)) {
+                    if (ans == nullptr || !this->rb_comp(ans->value, node->value) || this->rb_equal(node->value, ans->value)) {
                         ans = node;
                     }
 
@@ -1087,11 +1224,9 @@ class RBTreeImpl {
             nodeptr_t ans = nullptr;
             if (!root) return ans;
 
-            auto comp = [this](const storage_type& a, const storage_type& b) { return this->comp(a, b); };
-
             for (auto node=root;node!=nullptr;) {
-                if (this->comp(val, node->value)) {
-                    if (ans == nullptr || comp(node->value, ans->value) || node->value == ans->value) {
+                if (this->rb_comp(val, node->value)) {
+                    if (ans == nullptr || this->rb_comp(node->value, ans->value) || this->rb_equal(node->value, ans->value)) {
                         ans = node;
                     }
 
@@ -1112,13 +1247,13 @@ class RBTreeImpl {
         template<typename _K>
         nodeptr_t find(const _K& val) {
             auto node = this->lower_bound(val);
-            return node->value == val ? node : nullptr;
+            return node && this->rb_equal(node->value, val) ? node : nullptr;
         }
 
         template<typename _K>
         const_nodeptr_t find(const _K& val) const {
             auto node = this->lower_bound(val);
-            return node->value == val ? node : nullptr;
+            return node && this->rb_equal(node->value, val) ? node : nullptr;
         }
 
         template<typename _K>
@@ -1247,9 +1382,9 @@ class RBTreeImpl {
 
         RBTreeImpl(): root(nullptr), _version(0), _size(0) {
         }
-        RBTreeImpl(const Compare& cmp, const Alloc& alloc): root(nullptr), _version(0), cmp(cmp), allocator(alloc) {
+        RBTreeImpl(const Compare& cmp, const Alloc& alloc): root(nullptr), _version(0), _size(0), cmp(cmp), allocator(alloc) {
         }
-        RBTreeImpl(const Alloc& alloc): root(nullptr), _version(0), allocator(alloc) {
+        RBTreeImpl(const Alloc& alloc): root(nullptr), _version(0), _size(0), allocator(alloc) {
         }
 
         ~RBTreeImpl() {
@@ -1275,7 +1410,7 @@ struct DummyIterator {
     DummyIterator(std::weak_ptr<rbtree_t> tree, nodeptr_t node, size_t version) {}
 };
 
-template<bool reverse, bool const_iterator, typename RBTreeType, typename = std::enable_if<IsRBTreeImpl<RBTreeType>::value>>
+template<bool reverse, bool const_iterator, typename RBTreeType, typename std::enable_if<IsRBTreeImpl<RBTreeType>::value,bool>::type = true>
 class RBTreeImplIterator {
     public:
         using rbtree_t = RBTreeType;
@@ -1285,7 +1420,7 @@ class RBTreeImplIterator {
         using const_iterator_alt_t = typename std::conditional<const_iterator,DummyIterator<reverse,true,RBTreeType>,RBTreeImplIterator<reverse,true,RBTreeType>>::type;
 
         using iterator_category = typename std::conditional<RBTreeType::PositionInformation, std::random_access_iterator_tag, std::bidirectional_iterator_tag>::type;
-        using value_type = storage_type;
+        using value_type = typename storage_type::storage_type;
         using difference_type = long;
         using pointer = value_type*;
         using reference = typename std::conditional<const_iterator, const value_type&, value_type&>::type;
@@ -1306,6 +1441,22 @@ class RBTreeImplIterator {
             }
 
             return tree;
+        }
+
+    protected:
+        template<
+            typename _Key, typename _Value, bool multi, bool kepp_position_info,
+            typename Compare,
+            typename Alloc>
+        friend class generic_container;
+
+        void sync_version() {
+            auto tree = this->tree.lock();
+            if (!tree) {
+                throw std::logic_error("access invalid iterator");
+            }
+
+            this->version = tree->version();
         }
 
     public:
@@ -1332,7 +1483,7 @@ class RBTreeImplIterator {
             if (this->node == nullptr) {
                 throw std::out_of_range("dereference end of a container");
             }
-            return &node->value;
+            return &node->value.get();
         }
 
         pointer operator->() {
@@ -1340,7 +1491,7 @@ class RBTreeImplIterator {
             if (this->node == nullptr) {
                 throw std::out_of_range("dereference end of a container");
             }
-            return &node->value;
+            return &node->value.get();
         }
 
         const_reference operator*() const {
@@ -1348,7 +1499,7 @@ class RBTreeImplIterator {
             if (this->node == nullptr) {
                 throw std::out_of_range("dereference end of a container");
             }
-            return node->value;
+            return node->value.get();
         }
 
         reference operator*() {
@@ -1356,7 +1507,7 @@ class RBTreeImplIterator {
             if (this->node == nullptr) {
                 throw std::out_of_range("dereference end of a container");
             }
-            return node->value;
+            return node->value.get();
         }
 
         const_reference operator[](difference_type n) const {
@@ -1487,7 +1638,7 @@ class RBTreeImplIterator {
 };
 
 
-template<bool reverse, bool const_iterator, typename RBTreeType, typename = std::enable_if<IsRBTreeImpl<RBTreeType>::value>>
+template<bool reverse, bool const_iterator, typename RBTreeType, typename std::enable_if<IsRBTreeImpl<RBTreeType>::value,bool>::type = true>
 RBTreeImplIterator<reverse,const_iterator,RBTreeType> 
 operator+(
         typename  std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type n,
@@ -1498,69 +1649,71 @@ operator+(
 
 
 template<
-    typename _Key, bool multi, bool kepp_position_info,
-    typename Compare = default_compare_t<_Key,void>,
-    typename Alloc = default_allocato_t<_Key,void>>
-class generic_set {
-    private:
-        using rbtree_t = RBTreeImpl<_Key,void,multi,kepp_position_info,Compare,Alloc>;
+    typename _Key, typename _Value, bool multi, bool kepp_position_info,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+class generic_container {
+    protected:
+        using rbtree_t = RBTreeImpl<_Key,_Value,multi,kepp_position_info,Compare,Alloc>;
+        std::shared_ptr<rbtree_t> rbtree;
+
+    public:
+        using rbtree_storage_type = typename rbtree_t::storage_type;
         using iterator_t = RBTreeImplIterator<false,false,rbtree_t>;
         using const_iterator_t = RBTreeImplIterator<false,true,rbtree_t>;
         using reverse_iterator_t = RBTreeImplIterator<true,false,rbtree_t>;
         using reverse_const_iterator_t = RBTreeImplIterator<true,true,rbtree_t>;
-        std::shared_ptr<rbtree_t> rbtree;
 
-    public:
-        generic_set(): rbtree(std::make_shared<rbtree_t>()) {}
-        explicit generic_set(const Compare& cmp, const Alloc& alloc = Alloc()): rbtree(std::make_shared<rbtree_t>(cmp, alloc)) {
+        generic_container(): rbtree(std::make_shared<rbtree_t>()) {}
+        explicit generic_container(const Compare& cmp, const Alloc& alloc = Alloc()): rbtree(std::make_shared<rbtree_t>(cmp, alloc)) {
         }
-        explicit generic_set(const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
+        explicit generic_container(const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
         }
 
-        generic_set(const generic_set& oth): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), oth.rbtree->allocator_object()))
+        generic_container(const generic_container& oth): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), oth.rbtree->allocator_object()))
         {
             oth.rbtree->copy_to(*this->rbtree);
         }
-        generic_set(const generic_set& oth, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), alloc))
+        generic_container(const generic_container& oth, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), alloc))
         {
             oth.rbtree->copy_to(*this->rbtree);
         }
 
-        generic_set(generic_set&& oth): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), oth.rbtree->allocator_object()))
+        generic_container(generic_container&& oth): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), oth.rbtree->allocator_object()))
         {
             std::swap(oth.rbtree, this->rbtree);
         }
-        generic_set(generic_set&& oth, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), alloc))
+        generic_container(generic_container&& oth, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(oth.rbtree->cmp_object(), alloc))
         {
             std::swap(oth.rbtree, this->rbtree);
         }
 
         template<typename InputIt>
-        generic_set(InputIt begin, InputIt end, const Compare& cmp = Compare(), const Alloc& alloc = Alloc()):
+        generic_container(InputIt begin, InputIt end, const Compare& cmp = Compare(), const Alloc& alloc = Alloc()):
             rbtree(std::make_shared<rbtree_t>(cmp, alloc))
         {
             this->insert(begin, end);
         }
 
         template<typename InputIt>
-        generic_set(InputIt begin, InputIt end, const Alloc& alloc):
+        generic_container(InputIt begin, InputIt end, const Alloc& alloc):
             rbtree(std::make_shared<rbtree_t>(alloc))
         {
             this->insert(begin, end);
         }
 
-        generic_set(std::initializer_list<_Key> init, const Compare& cmp, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
+        generic_container(std::initializer_list<rbtree_storage_type> init, const Compare& cmp, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
             this->insert(init);
         }
-        generic_set(std::initializer_list<_Key> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
+        generic_container(std::initializer_list<rbtree_storage_type> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
             this->insert(init);
         }
 
-        generic_set& operator=(const generic_set& oth) {
+        generic_container& operator=(const generic_container& oth) {
             oth.rbtree->copy_to(*this->rbtree);
             return *this;
         }
-        generic_set& operator=(generic_set&& oth) {
+        generic_container& operator=(generic_container&& oth) {
             this->rbtree->clear();
             std::swap(this->rbtree, oth.rbtree);
             this->rbtree->touch();
@@ -1675,13 +1828,13 @@ class generic_set {
             for(;first != last;first++) this->insert(*first);
         }
 
-        inline void insert(std::initializer_list<_Key> list) {
+        inline void insert(std::initializer_list<rbtree_storage_type> list) {
             this->insert(list.begin(), list.end());
         }
 
         template< class... Args >
         inline std::pair<iterator_t,bool> emplace( Args&&... args ){
-            auto result = this->rbtree->emplace(nullptr, std::forward<Args...>(args...));
+            auto result = this->rbtree->emplace(nullptr, std::forward<Args>(args)...);
             return iterator_t(this->rbtree, result.first, this->rbtree->version());
         }
 
@@ -1691,7 +1844,7 @@ class generic_set {
                 throw std::logic_error("hint is an invalid iterator");
             }
 
-            auto result = this->rbtree->emplace(hint.nodeptr(), std::forward<Args...>(args...));
+            auto result = this->rbtree->emplace(hint.nodeptr(), std::forward<Args>(args)...);
             return iterator_t(this->rbtree, result.first, this->rbtree->version());
         }
 
@@ -1721,6 +1874,36 @@ class generic_set {
             return iterator_t(this->rbtree, next_ptr, this->rbtree->version());
         }
 
+        iterator_t erase(iterator_t first, iterator_t last) {
+            return this->erase(const_iterator_t(first), const_iterator_t(last));
+        }
+
+        iterator_t erase(const_iterator_t first, const_iterator_t last) {
+            if (first > last) {
+                throw std::logic_error("invalid range");
+            }
+
+            iterator_t ans = this->end();
+            for (;first!=this->cend() && first!=last;) {
+                ans = this->erase(first);
+                first = ans;
+                last.sync_version();
+            }
+            return ans;
+        }
+
+        size_t erase(const _Key& key) {
+            auto first = this->lower_bound(key);
+            auto last = this->upper_bound(key);
+            auto ans = std::distance(first, last);
+            this->erase(first, last);
+            return ans;
+        }
+
+        void swap(generic_container& oth) noexcept {
+            std::swap(this->rbtree, oth.rbtree);
+        }
+
         void clear() {
             this->rbtree->clear();
         }
@@ -1728,30 +1911,144 @@ class generic_set {
 
 
 template<
+    typename _Key, typename _Value, bool multi, bool kepp_position_info,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>,
+    typename std::enable_if<!std::is_same<_Value,void>::value,bool>::type = true>
+class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc> {
+    private:
+        using base_t = generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>;
+
+    public:
+        using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using iterator_t = typename base_t::iterator_t;
+        using const_iterator_t = typename base_t::const_iterator_t;
+        using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
+        using reverse_const_iterator_t = typename base_t::reverse_const_iterator_t;
+
+        generic_map() = default;
+        template<typename ...Args>
+        generic_map(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+};
+
+
+template<
+    typename _Key, bool multi, bool kepp_position_info,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,void>>
+class generic_set: public generic_container<_Key,void,multi,kepp_position_info,Compare,Alloc> {
+    private:
+        using base_t = generic_container<_Key,void,multi,kepp_position_info,Compare,Alloc>;
+
+    public:
+        using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using iterator_t = typename base_t::iterator_t;
+        using const_iterator_t = typename base_t::const_iterator_t;
+        using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
+        using reverse_const_iterator_t = typename base_t::reverse_const_iterator_t;
+
+        generic_set() = default;
+        template<typename ...Args>
+        generic_set(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+};
+
+
+template<
+    typename _Key, typename _Value, bool kepp_position_info,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Compare,Alloc> {
+    private:
+        using base_t = generic_map<_Key,_Value,false,kepp_position_info,Compare,Alloc>;
+
+    public:
+        using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using iterator_t = typename base_t::iterator_t;
+        using const_iterator_t = typename base_t::const_iterator_t;
+        using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
+        using reverse_const_iterator_t = typename base_t::reverse_const_iterator_t;
+
+        generic_unimap() = default;
+        template<typename ...Args>
+        generic_unimap(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+
+        _Value& at(const _Key& key) {
+            auto at = this->find(key);
+            if (at == this->end()) {
+                throw std::out_of_range("out of range");
+            }
+            return at->second;
+        }
+
+        const _Value& at(const _Key& key) const {
+            return const_cast<generic_unimap*>(this)->at(key);
+        }
+
+        template<typename K>
+        _Value& operator[](K&& key) {
+            auto at = this->find(key);
+            if (at == this->end()) {
+                auto ins_result = this->insert(rbtree_storage_type(std::forward<K>(key), _Value()));
+                RB_ASSERT(ins_result.second);
+                return ins_result.first->second;
+            } else {
+                return at->second;
+            }
+        }
+};
+
+
+template<
     typename _Key,
-    typename Compare = default_compare_t<_Key,void>,
+    typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,void>>
 using set2 = generic_set<_Key,false,false,Compare,Alloc>;
 
 template<
     typename _Key,
-    typename Compare = default_compare_t<_Key,void>,
+    typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,void>>
 using pset = generic_set<_Key,false,true,Compare,Alloc>;
 
 template<
     typename _Key,
-    typename Compare = default_compare_t<_Key,void>,
+    typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,void>>
 using multiset2 = generic_set<_Key,true,false,Compare,Alloc>;
 
 template<
     typename _Key,
-    typename Compare = default_compare_t<_Key,void>,
+    typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,void>>
 using pmultiset = generic_set<_Key,true,true,Compare,Alloc>;
 
 
+template<
+    typename _Key, typename _Value,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+using multimap2 = generic_map<_Key,_Value,true,false,Compare,Alloc>;
+
+template<
+    typename _Key, typename _Value,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+using pmultimap = generic_map<_Key,_Value,true,true,Compare,Alloc>;
+
+template<
+    typename _Key, typename _Value,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+using map2 = generic_unimap<_Key,_Value,false,Compare,Alloc>;
+
+template<
+    typename _Key, typename _Value,
+    typename Compare = default_compare_t<_Key>,
+    typename Alloc = default_allocato_t<_Key,_Value>>
+using pmap = generic_unimap<_Key,_Value,true,Compare,Alloc>;
+
+
 // TODO just for making intellisense work in development
-template class generic_set<int, true, true>;
+template class generic_container<int,void,true,true>;
+template class generic_container<int,int,true,true>;
 

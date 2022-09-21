@@ -45,21 +45,21 @@ static void insert_test(const size_t n_vals) {
     tree_multi2.check_consistency();
     auto b1=tree_multi.begin(),b2=tree_multi2.begin();
     for (;b1!=nullptr;b1=tree_multi.advance(b1,1),b2=tree_multi2.advance(b2,1)) {
-        ASSERT_EQ(b1->value, b2->value);
+        ASSERT_EQ(b1->value.get(), b2->value.get());
         ASSERT_EQ(b1->black, b2->black);
         ASSERT_EQ(b1->num_of_nodes(), b2->num_of_nodes());
     }
     ASSERT_EQ(b2, nullptr);
 
     auto vp = tree.begin();
-    auto v = vp->value;
-    for (vp=tree.advance(vp,1);vp!=nullptr;v=vp->value, vp=tree.advance(vp,1))
-        ASSERT_LT(v, vp->value);
+    auto v = vp->value.get();
+    for (vp=tree.advance(vp,1);vp!=nullptr;v=vp->value.get(), vp=tree.advance(vp,1))
+        ASSERT_LT(v, vp->value.get());
 
     auto mvp = tree_multi.begin();
-    auto mv = mvp->value;
-    for (mvp=tree_multi.advance(mvp,1);mvp!=nullptr;mv=mvp->value, mvp=tree_multi.advance(mvp,1))
-        ASSERT_LE(mv, mvp->value);
+    auto mv = mvp->value.get();
+    for (mvp=tree_multi.advance(mvp,1);mvp!=nullptr;mv=mvp->value.get(), mvp=tree_multi.advance(mvp,1))
+        ASSERT_LE(mv, mvp->value.get());
 
 
     std::sort(vnnn.begin(), vnnn.end());
@@ -69,7 +69,7 @@ static void insert_test(const size_t n_vals) {
 
     size_t i=0; auto tp = tree.begin();
     for (auto sp=snnn.begin();sp!=snnn.end();sp++, i++, tp=tree.advance(tp, 1)) {
-        ASSERT_EQ(*sp, tp->value);
+        ASSERT_EQ(*sp, tp->value.get());
         ASSERT_EQ(tree.indexof(tp), i);
     }
     ASSERT_EQ(tp, nullptr);
@@ -78,7 +78,7 @@ static void insert_test(const size_t n_vals) {
 
     i=0; auto tmp = tree_multi.begin();
     for (auto vp=vnnn.begin();vp!=vnnn.end();vp++, i++, tmp=tree_multi.advance(tmp, 1)) {
-        ASSERT_EQ(*vp, tmp->value);
+        ASSERT_EQ(*vp, tmp->value.get());
         ASSERT_EQ(tree_multi.indexof(tmp), i);
     }
     ASSERT_EQ(tmp, nullptr);

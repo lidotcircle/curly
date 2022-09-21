@@ -51,7 +51,7 @@ static void set_remove_test(const size_t n_vals) {
         auto pos = mdist(generator) % tree.size();
         auto node = tree.advance(tree.begin(), pos);
         auto node_next = tree.advance(node, 1);
-        auto stl_erase = stl_set.find(node->value);
+        auto stl_erase = stl_set.find(node->value.get());
         ASSERT_NE(stl_erase, stl_set.end());
 
         auto next_node = tree.erase(node, true);
@@ -59,7 +59,7 @@ static void set_remove_test(const size_t n_vals) {
         ASSERT_EQ(next_node, node_next);
         if (next_node != nullptr) {
             ASSERT_NE(stl_next, stl_set.end());
-            ASSERT_EQ(next_node->value, *stl_next);
+            ASSERT_EQ(next_node->value.get(), *stl_next);
         } else {
             ASSERT_EQ(stl_next, stl_set.end());
         }
