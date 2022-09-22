@@ -27,11 +27,11 @@ static void map_constructor(int mvals) {
     m = M(m);
     m = M(m, std::allocator<int>());
     m = M(std::initializer_list<std::pair<const int,int>>({ std::make_pair(1,1), {2,2}, {3,3}, {4,4} }));
-    // m = M(std::initializer_list<std::pair<int,int>>({ {1,1}, {2,2}, {3,3}, {4,4} }));
-    // m = M({ 1, 2, 3, 4 });
-    // m = M({ 1, 2, 3, 4 }, std::less<int>());
-    // m = M({ 1, 2, 3, 4 }, std::allocator<int>());
-    // m = M({ 1, 2, 3, 4 }, std::less<int>(), std::allocator<int>());
+    m = M({ std::pair(1,1), {2,2}, {3,3}, {4,4} } );
+    m = M({ {1,1}, {2,2}, {3,3}, {4,4} } );
+    m = M({ {1,1}, {2,2}, {3,3}, {4,4} }, std::less<int>());
+    m = M({ {1,1}, {2,2}, {3,3}, {4,4} }, std::allocator<int>());
+    m = M({ {1,1}, {2,2}, {3,3}, {4,4} }, std::less<int>(), std::allocator<int>());
 
     ASSERT_EQ(m.size(), 4);
     auto beg = m.begin();
@@ -138,7 +138,7 @@ static void map_insert(int mvals) {
     std::vector<std::pair<int,int>> vals = { {5,5}, {6,6}, {7,7}, {8,8} };
     m.insert(vals.begin(), vals.end());
     m.insert({std::make_pair(1,1),{2,2},{3,3},{4,4}});
-    // m.insert({1,1},{2,2},{3,3},{4,4}});
+    // m.insert({{1,1},{2,2},{3,3},{4,4}});
     ASSERT_EQ(m.size(), 9);
 }
 

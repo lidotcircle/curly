@@ -1995,6 +1995,7 @@ class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info
 
     public:
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using rbtree_storage_type_base = typename base_t::rbtree_storage_type_base;
         using iterator_t = typename base_t::iterator_t;
         using const_iterator_t = typename base_t::const_iterator_t;
         using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
@@ -2003,6 +2004,12 @@ class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info
         generic_map() = default;
         template<typename ...Args>
         generic_map(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+
+        generic_map(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
+        }
+
+        generic_map(std::initializer_list<rbtree_storage_type_base> init, const Alloc& alloc): base_t(std::move(init), alloc) {
+        }
 };
 
 
@@ -2016,6 +2023,7 @@ class generic_set: public generic_container<_Key,void,multi,kepp_position_info,C
 
     public:
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using rbtree_storage_type_base= typename base_t::rbtree_storage_type_base;
         using iterator_t = typename base_t::iterator_t;
         using const_iterator_t = typename base_t::const_iterator_t;
         using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
@@ -2024,6 +2032,12 @@ class generic_set: public generic_container<_Key,void,multi,kepp_position_info,C
         generic_set() = default;
         template<typename ...Args>
         generic_set(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+
+        generic_set(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
+        }
+
+        generic_set(std::initializer_list<rbtree_storage_type_base> init, const Alloc& alloc): base_t(std::move(init), alloc) {
+        }
 };
 
 
@@ -2037,6 +2051,7 @@ class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Co
 
     public:
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
+        using rbtree_storage_type_base = typename base_t::rbtree_storage_type_base;
         using iterator_t = typename base_t::iterator_t;
         using const_iterator_t = typename base_t::const_iterator_t;
         using reverse_iterator_t = typename base_t::reverse_const_iterator_t;
@@ -2045,6 +2060,12 @@ class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Co
         generic_unimap() = default;
         template<typename ...Args>
         generic_unimap(Args&& ...args): base_t(std::forward<Args>(args)...) {}
+
+        generic_unimap(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
+        }
+
+        generic_unimap(std::initializer_list<rbtree_storage_type_base> init, const Alloc& alloc): base_t(std::move(init), alloc) {
+        }
 
         _Value& at(const _Key& key) {
             auto at = this->find(key);

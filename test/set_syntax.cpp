@@ -27,10 +27,10 @@ static void set_constructor(int mvals) {
     m = M(m);
     m = M(m, std::allocator<int>());
     m = M(std::initializer_list<int>({ 1, 2, 3, 4 }));
-    // m = M({ 1, 2, 3, 4 });
-    // m = M({ 1, 2, 3, 4 }, std::less<int>());
-    // m = M({ 1, 2, 3, 4 }, std::allocator<int>());
-    // m = M({ 1, 2, 3, 4 }, std::less<int>(), std::allocator<int>());
+    m = M({ 1, 2, 3, 4 });
+    m = M({ 1, 2, 3, 4 }, std::less<int>());
+    m = M({ 1, 2, 3, 4 }, std::allocator<int>());
+    m = M({ 1, 2, 3, 4 }, std::less<int>(), std::allocator<int>());
 
     ASSERT_EQ(m.size(), 4);
     auto beg = m.begin();
