@@ -138,7 +138,7 @@ static void map_insert(int mvals) {
     std::vector<std::pair<int,int>> vals = { {5,5}, {6,6}, {7,7}, {8,8} };
     m.insert(vals.begin(), vals.end());
     m.insert({std::make_pair(1,1),{2,2},{3,3},{4,4}});
-    // m.insert({{1,1},{2,2},{3,3},{4,4}});
+    m.insert({{1,1},{2,2},{3,3},{4,4}});
     ASSERT_EQ(m.size(), 9);
 }
 

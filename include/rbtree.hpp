@@ -2010,6 +2010,11 @@ class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info
 
         generic_map(std::initializer_list<rbtree_storage_type_base> init, const Alloc& alloc): base_t(std::move(init), alloc) {
         }
+
+        using base_t::insert;
+        inline void insert(std::initializer_list<rbtree_storage_type_base> list) {
+            this->insert(list.begin(), list.end());
+        }
 };
 
 
