@@ -7,6 +7,7 @@
 #define DEBUG 1
 #include "rbtree.hpp"
 using namespace std;
+using namespace curly;
 
 
 std::default_random_engine generator;

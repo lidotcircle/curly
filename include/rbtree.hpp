@@ -6,10 +6,6 @@
 #include <stdexcept>
 #include <limits>
 
-// TODO just for development
-#define DEBUG 1
-#define THROW(msg) throw std::logic_error(msg)
-#include <iostream>
 
 #ifdef DEBUG
 #include <assert.h>
@@ -19,6 +15,8 @@
 #define RB_ASSERT(x)
 #endif
 
+
+namespace curly {
 
 template<typename T1, typename T2>
 struct is_same_value_type:
@@ -1415,9 +1413,6 @@ class RBTreeImpl {
         }
 };
 
-// TODO just for making intellisense work in development
-template class RBTreeImpl<int,void,true,true>;
-template class RBTreeImpl<int,void,true,false>;
 
 template<typename T>
 struct IsRBTreeImpl : std::false_type {};
@@ -2146,9 +2141,4 @@ template<
     typename Compare = default_compare_t<_Key>,
     typename Alloc = default_allocato_t<_Key,_Value>>
 using pmap = generic_unimap<_Key,_Value,true,Compare,Alloc>;
-
-
-// TODO just for making intellisense work in development
-template class generic_container<int,void,true,true>;
-template class generic_container<int,int,true,true>;
-
+}

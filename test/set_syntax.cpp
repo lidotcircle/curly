@@ -4,6 +4,7 @@
 
 #define DEBUG 1
 #include "rbtree.hpp"
+using namespace curly;
 
 
 template<typename M>
