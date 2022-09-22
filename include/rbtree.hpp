@@ -34,7 +34,7 @@ public:
 
     RBTreeValueKV() = delete;
 
-    template<typename T, std::enable_if_t<!is_same_value_type<T,RBTreeValueKV>::value,bool> = true>
+    template<typename T, std::enable_if_t<!std::is_convertible<T,RBTreeValueKV>::value,bool> = true>
     RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
 
     template<typename T1, typename T2>
@@ -79,7 +79,7 @@ public:
     using storage_type = const K;
 
     RBTreeValueK() = delete;
-    template<typename T, std::enable_if_t<is_same_value_type<T,K>::value,bool> = true>
+    template<typename T, std::enable_if_t<std::is_convertible<T,K>::value,bool> = true>
     RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
 
     template<typename T1, typename T2>
@@ -879,6 +879,10 @@ class RBTreeImpl {
             return node->minimum();
         }
 
+        inline nodeptr_t maximum(nodeptr_t node) const {
+            return node->maximum();
+        }
+
         inline void swap_node(nodeptr_t n1, nodeptr_t n2) const {
             RB_ASSERT(n1);
             RB_ASSERT(n2);
@@ -1192,6 +1196,13 @@ class RBTreeImpl {
             return node->indexof();
         }
 
+        size_t indexof(const_nodeptr_t node) const {
+            size_t ans = 0;
+            if (node == nullptr)
+                return this->size();
+            return node->indexof();
+        }
+
         template<typename _K>
         nodeptr_t lower_bound(const _K& val) {
             auto root = this->root;
@@ -1273,6 +1284,18 @@ class RBTreeImpl {
             if (!this->root) return nullptr;
 
             return this->minimum(this->root);
+        }
+
+        nodeptr_t rbegin() {
+            if (!this->root) return nullptr;
+
+            return this->maximum(this->root);
+        }
+
+        const_nodeptr_t rbegin() const {
+            if (!this->root) return nullptr;
+
+            return this->maximum(this->root);
         }
 
         // TODO prototype
@@ -1549,6 +1572,7 @@ class RBTreeImplIterator {
             } else {
                 this->node = dec;
             }
+            return *this;
         }
 
         RBTreeImplIterator operator--(int) {
@@ -1596,6 +1620,14 @@ class RBTreeImplIterator {
 
         difference_type operator-(RBTreeImplIterator iter) const {
             difference_type idx1 = this->indexof(), idx2 = iter.indexof();
+
+            if (reverse) {
+                auto tree = this->check_version();
+                auto size = tree->size();
+                idx1 = idx1 != size ? size - 1 - idx1 : idx1;
+                idx2 = idx2 != size ? size - 1 - idx2 : idx2;
+            }
+
             return idx1 - idx2;
         }
 
@@ -1659,6 +1691,7 @@ class generic_container {
 
     public:
         using rbtree_storage_type = typename rbtree_t::storage_type;
+        using rbtree_storage_type_base = typename rbtree_t::storage_type::storage_type;
         using iterator_t = RBTreeImplIterator<false,false,rbtree_t>;
         using const_iterator_t = RBTreeImplIterator<false,true,rbtree_t>;
         using reverse_iterator_t = RBTreeImplIterator<true,false,rbtree_t>;
@@ -1688,24 +1721,36 @@ class generic_container {
             std::swap(oth.rbtree, this->rbtree);
         }
 
-        template<typename InputIt>
+        template<
+            typename InputIt, 
+            typename std::enable_if<
+                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                bool>::type = true>
         generic_container(InputIt begin, InputIt end, const Compare& cmp = Compare(), const Alloc& alloc = Alloc()):
             rbtree(std::make_shared<rbtree_t>(cmp, alloc))
         {
             this->insert(begin, end);
         }
 
-        template<typename InputIt>
+        template<
+            typename InputIt, 
+            typename std::enable_if<
+                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                bool>::type = true>
         generic_container(InputIt begin, InputIt end, const Alloc& alloc):
             rbtree(std::make_shared<rbtree_t>(alloc))
         {
             this->insert(begin, end);
         }
 
-        generic_container(std::initializer_list<rbtree_storage_type> init, const Compare& cmp, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
+        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        generic_container(std::initializer_list<T> init, const Compare& cmp = {}, const Alloc& alloc = {}): rbtree(std::make_shared<rbtree_t>(cmp, alloc)) {
             this->insert(init);
         }
-        generic_container(std::initializer_list<rbtree_storage_type> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
+        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        generic_container(std::initializer_list<T> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
             this->insert(init);
         }
 
@@ -1740,13 +1785,13 @@ class generic_container {
         inline const_iterator_t cbegin() const { return const_iterator_t(this->rbtree, this->rbtree->begin(), this->rbtree->version()); }
         inline const_iterator_t cend() const { return const_iterator_t(this->rbtree, nullptr, this->rbtree->version()); }
 
-        inline reverse_iterator_t rbegin() { return reverse_iterator_t(this->rbtree, this->rbtree->begin(), this->rbtree->version()); }
+        inline reverse_iterator_t rbegin() { return reverse_iterator_t(this->rbtree, this->rbtree->rbegin(), this->rbtree->version()); }
         inline reverse_iterator_t rend() { return reverse_iterator_t(this->rbtree, nullptr, this->rbtree->version()); }
 
-        inline reverse_const_iterator_t rbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->begin(), this->rbtree->version()); }
+        inline reverse_const_iterator_t rbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->rbegin(), this->rbtree->version()); }
         inline reverse_const_iterator_t rend() const { return reverse_const_iterator_t(this->rbtree, nullptr, this->rbtree->version()); }
 
-        inline reverse_const_iterator_t crbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->begin(), this->rbtree->version()); }
+        inline reverse_const_iterator_t crbegin() const { return reverse_const_iterator_t(this->rbtree, this->rbtree->rbegin(), this->rbtree->version()); }
         inline reverse_const_iterator_t crend() const { return reverse_const_iterator_t(this->rbtree, nullptr, this->rbtree->version()); }
 
         template<typename _K>
@@ -1823,19 +1868,25 @@ class generic_container {
             return this->emplace_hint(hint, std::forward<ValType>(val));
         }
 
-        template<typename InputIt>
+        template<
+            typename InputIt, 
+            typename std::enable_if<
+                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                bool>::type = true>
         void insert(InputIt first, InputIt last) {
             for(;first != last;first++) this->insert(*first);
         }
 
-        inline void insert(std::initializer_list<rbtree_storage_type> list) {
+        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        inline void insert(std::initializer_list<T> list) {
             this->insert(list.begin(), list.end());
         }
 
         template< class... Args >
         inline std::pair<iterator_t,bool> emplace( Args&&... args ){
             auto result = this->rbtree->emplace(nullptr, std::forward<Args>(args)...);
-            return iterator_t(this->rbtree, result.first, this->rbtree->version());
+            return std::make_pair(iterator_t(this->rbtree, result.first, this->rbtree->version()), result.second);
         }
 
         template< class... Args >
@@ -1908,6 +1959,29 @@ class generic_container {
             this->rbtree->clear();
         }
 };
+
+
+template<typename _Key, typename _Value, bool multi, bool kepp_position_info, typename Compare, typename Alloc>
+bool operator==(const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& lhs,
+                const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& rhs)
+{
+    if (lhs.size() != rhs.size()) return false;
+
+    for (auto lhs_begin=lhs.begin(),rhs_begin=rhs.begin();lhs_begin!=lhs.end();lhs_begin++,rhs_begin++) {
+        if (*lhs_begin != *rhs_begin) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template<typename _Key, typename _Value, bool multi, bool kepp_position_info, typename Compare, typename Alloc>
+bool operator!=(const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& lhs,
+                const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& rhs)
+{
+    return !operator==(lhs, rhs);
+}
 
 
 template<
