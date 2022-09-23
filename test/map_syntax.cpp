@@ -28,7 +28,11 @@ static void map_constructor(int mvals) {
     m = M(m);
     m = M(m, std::allocator<int>());
     m = M(std::initializer_list<std::pair<const int,int>>({ std::make_pair(1,1), {2,2}, {3,3}, {4,4} }));
+#if __cplusplus >= 201703L
     m = M({ std::pair(1,1), {2,2}, {3,3}, {4,4} } );
+#else
+    m = M({ std::pair<int,int>(1,1), {2,2}, {3,3}, {4,4} } );
+#endif
     m = M({ {1,1}, {2,2}, {3,3}, {4,4} } );
     m = M({ {1,1}, {2,2}, {3,3}, {4,4} }, std::less<int>());
     m = M({ {1,1}, {2,2}, {3,3}, {4,4} }, std::allocator<int>());

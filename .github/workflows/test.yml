@@ -53,6 +53,12 @@ jobs:
       - name: Memory Leak Detection
         run: cd build/test && for f in $(ls | grep '^test[^.]*$'); do echo "$f" &&  eval "valgrind ./$f" || exit 1; done
 
+      - name: CXX14 Build
+        run: mkdir build_cxx14 && cd build_cxx14 && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=14 && make
+
+      - name: CXX11 Build
+        run: mkdir build_cxx11 && cd build_cxx11 && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=11 && make
+
       - name: Debug Build
         run: rm -rf build && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make
 
@@ -75,6 +81,20 @@ jobs:
           mkdir build
           cd build
           cmake -DCMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
+          nmake
+
+      - name: CXX14 Build
+        run: |
+          mkdir build_cxx14
+          cd build_cxx14
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=14 -G "NMake Makefiles" ..
+          nmake
+
+      - name: CXX11 Build
+        run: |
+          mkdir build_cxx11
+          cd build_cxx11
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=11 -G "NMake Makefiles" ..
           nmake
 
       - name: Release Test

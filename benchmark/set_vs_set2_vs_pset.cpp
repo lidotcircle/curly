@@ -92,16 +92,10 @@ void BM_advance_distance_random(benchmark::State& state) {
         auto mval = dist(generator);
         mval %= (st.size() + 1);
         auto it = st.begin();
-        if constexpr (std::is_same_v<S,std::set<size_t>>) {
-            auto i2 = it;
-            for(size_t k=0;k<mval;k++, i2++);
-            auto dis = distance(it, i2);
-            T_ASSERT(mval == dis);
-        } else {
-            auto i2 = it + mval;
-            auto dis = distance(it, i2);
-            T_ASSERT(mval == dis);
-        }
+        auto i2 = it;
+        std::advance(i2, mval);
+        auto dis = std::distance(it, i2);
+        T_ASSERT(mval == dis);
     }
 }
 BM_func(advance_distance_random, std::set<size_t>);

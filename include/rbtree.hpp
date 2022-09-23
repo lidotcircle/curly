@@ -21,8 +21,8 @@ namespace curly {
 template<typename T1, typename T2>
 struct is_same_value_type:
     std::is_same<
-        std::remove_reference_t<std::remove_const_t<std::remove_reference_t<T1>>>,
-        std::remove_reference_t<std::remove_const_t<std::remove_reference_t<T2>>>
+        typename std::remove_reference<typename std::remove_const<typename std::remove_reference<T1>::type>::type>::type,
+        typename std::remove_reference<typename std::remove_const<typename std::remove_reference<T2>::type>::type>::type
     > {};
 
 template<typename K, typename V>
@@ -32,7 +32,7 @@ public:
 
     RBTreeValueKV() = delete;
 
-    template<typename T, std::enable_if_t<!std::is_convertible<T,RBTreeValueKV>::value,bool> = true>
+    template<typename T, typename std::enable_if<!std::is_convertible<T,RBTreeValueKV>::value,bool>::type = true>
     RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
 
     template<typename T1, typename T2>
@@ -77,7 +77,7 @@ public:
     using storage_type = const K;
 
     RBTreeValueK() = delete;
-    template<typename T, std::enable_if_t<std::is_convertible<T,K>::value,bool> = true>
+    template<typename T, typename std::enable_if<std::is_convertible<T,K>::value,bool>::type = true>
     RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
 
     template<typename T1, typename T2>
@@ -345,7 +345,7 @@ public:
         return i;
     }
 
-    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNodeBasic>::value, bool> = true>
+    template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodeBasic>::value, bool>::type = true>
     RBTreeNodeBasic(St&& val):
         left(nullptr), right(nullptr), parent(nullptr),
         black(false), value(std::forward<St>(val))
@@ -361,7 +361,7 @@ template<typename S>
 struct RBTreeNode: public RBTreeNodeBasic<S,RBTreeNode<S>*> {
     using base_type = RBTreeNodeBasic<S,RBTreeNode<S>*>;
 
-    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNode>::value, bool> = true>
+    template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNode>::value, bool>::type = true>
     RBTreeNode(St&& val): base_type(std::forward<St>(val)) {}
 };
 
@@ -475,7 +475,7 @@ public:
         return ans;
     }
 
-    template<typename St, std::enable_if_t<!is_same_value_type<St,RBTreeNodePosInfo>::value, bool> = true>
+    template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodePosInfo>::value, bool>::type = true>
     RBTreeNodePosInfo(St&& val): base_type(std::forward<St>(val)), num_nodes(1) {}
 };
 
