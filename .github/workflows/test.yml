@@ -14,11 +14,38 @@ jobs:
         with:
           submodules: recursive
 
+      - name: release name
+        id: release
+        run: |
+          branch=$(echo ${{github.ref}} | sed 's/refs\/\(heads\|tags\)\///g') && \
+            release=$([[ "$branch" =~ v[0-9.]+ ]] && echo $branch || echo $branch) && \
+            echo "release_name=$release" && \
+            printf "::set-output name=release::%s\n" "$release"
+
       - name: install packages
-        run: sudo apt-get install -y cmake clang valgrind
+        run: sudo apt-get install -y cmake clang valgrind python3
 
       - name: Release Build
         run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
+
+      - name: setup python dependencies
+        run: cd tools/google_benchmark_plot && python3 -m pip install -r ./requirements.txt
+
+      - name: benchmark
+        run: |
+          cd build/benchmark/
+          for f in $(ls | grep '^benchmark.*$'); do
+            eval "./$f --benchmark_out_format=json --benchmark_out=$f.json"
+            python3 ../../tools/google_benchmark_plot/plot.py -f $f.json -m cpu_time --output $f.png --logx --logy
+          done
+
+      - name: release benchmark results
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "./build/benchmark/*.png"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.release }}
 
       - name: Release Test
         run: cd build/test && ctest

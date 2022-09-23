@@ -10,17 +10,20 @@ using namespace curly;
 #define MIN_AB(a, b) ((a) > (b) ? (b) : (a))
 #define T_ASSERT(expr) if (!(expr)) { benchmark::DoNotOptimize(expr); throw std::logic_error("assert failure"); }
 
-#define BM_func(func, cls) \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(10); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(100); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(1000); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(10000); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(100000); \
-BENCHMARK_TEMPLATE1(func, cls)->Arg(1000000)
+#define REG_SINGLE_TEST(group, cls, n) \
+    BENCHMARK_TEMPLATE1(BM_##group, cls)->Arg(n)->Name(#group"/"#cls)
+
+#define BM_func(group, cls) \
+REG_SINGLE_TEST(group, cls, 10); \
+REG_SINGLE_TEST(group, cls, 100); \
+REG_SINGLE_TEST(group, cls, 1000); \
+REG_SINGLE_TEST(group, cls, 10000); \
+REG_SINGLE_TEST(group, cls, 100000); \
+REG_SINGLE_TEST(group, cls, 1000000)
 
 
 template<typename S>
-void BM_random_move(benchmark::State& state) {
+void BM_advance_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     S st;
@@ -34,24 +37,18 @@ void BM_random_move(benchmark::State& state) {
         auto mval = dist(generator);
         mval %= (st.size() + 1);
         auto it = st.begin();
-        if constexpr (std::is_same_v<S,std::set<size_t>>) {
-            auto i2 = it;
-            for(size_t k=0;k<mval;k++, i2++);
-            T_ASSERT(i2 == st.end() || *i2 == mval);
-        } else {
-            auto i2 = it;
-            i2 = it + mval;
-            T_ASSERT(i2 == st.end() || *i2 == mval);
-        }
+        auto i2 = it;
+        std::advance(i2, mval);
+        T_ASSERT(i2 == st.end() || *i2 == mval);
     }
 }
-BM_func(BM_random_move, std::set<size_t>);
-BM_func(BM_random_move, set2<size_t>);
-BM_func(BM_random_move, pset<size_t>);
+BM_func(advance_random, std::set<size_t>);
+BM_func(advance_random, set2<size_t>);
+BM_func(advance_random, pset<size_t>);
 
 
 template<typename S>
-void BM_random_value_position(benchmark::State& state) {
+void BM_distance_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> dist(0,n_vals * 3);
@@ -74,13 +71,13 @@ void BM_random_value_position(benchmark::State& state) {
     }
     benchmark::DoNotOptimize(ans);
 }
-BM_func(BM_random_value_position, std::set<size_t>);
-BM_func(BM_random_value_position, set2<size_t>);
-BM_func(BM_random_value_position, pset<size_t>);
+BM_func(distance_random, std::set<size_t>);
+BM_func(distance_random, set2<size_t>);
+BM_func(distance_random, pset<size_t>);
 
 
 template<typename S>
-void BM_random_move_dis(benchmark::State& state) {
+void BM_advance_distance_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> distribution(0,n_vals*3);
@@ -107,13 +104,13 @@ void BM_random_move_dis(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_random_move_dis, std::set<size_t>);
-BM_func(BM_random_move_dis, set2<size_t>);
-BM_func(BM_random_move_dis, pset<size_t>);
+BM_func(advance_distance_random, std::set<size_t>);
+BM_func(advance_distance_random, set2<size_t>);
+BM_func(advance_distance_random, pset<size_t>);
 
 
 template<typename S>
-void BM_set_copy(benchmark::State& state) {
+void BM_copy_incremental(benchmark::State& state) {
     S st;
     for (size_t i=0;i<state.range(0);i++) {
         st.insert(i);
@@ -124,13 +121,13 @@ void BM_set_copy(benchmark::State& state) {
         vals.clear();
     }
 }
-BM_func(BM_set_copy, std::set<size_t>);
-BM_func(BM_set_copy, set2<size_t>);
-BM_func(BM_set_copy, pset<size_t>);
+BM_func(copy_incremental, std::set<size_t>);
+BM_func(copy_incremental, set2<size_t>);
+BM_func(copy_incremental, pset<size_t>);
 
 
 template<typename S>
-void BM_random_set_copy(benchmark::State& state) {
+void BM_copy_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> distribution(0,n_vals*3);
@@ -144,13 +141,13 @@ void BM_random_set_copy(benchmark::State& state) {
         vals.clear();
     }
 }
-BM_func(BM_random_set_copy, std::set<size_t>);
-BM_func(BM_random_set_copy, set2<size_t>);
-BM_func(BM_random_set_copy, pset<size_t>);
+BM_func(copy_random, std::set<size_t>);
+BM_func(copy_random, set2<size_t>);
+BM_func(copy_random, pset<size_t>);
 
 
 template<typename S>
-void BM_random_set_erase(benchmark::State& state) {
+void BM_erase_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> distribution(0,n_vals*3);
@@ -175,13 +172,13 @@ void BM_random_set_erase(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_random_set_erase, std::set<size_t>);
-BM_func(BM_random_set_erase, set2<size_t>);
-BM_func(BM_random_set_erase, pset<size_t>);
+BM_func(erase_random, std::set<size_t>);
+BM_func(erase_random, set2<size_t>);
+BM_func(erase_random, pset<size_t>);
 
 
 template<typename S>
-void BM_set_inc(benchmark::State& state) {
+void BM_insert_incremental(benchmark::State& state) {
     for (auto _: state) {
         S vals;
 
@@ -190,13 +187,13 @@ void BM_set_inc(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_inc, std::set<size_t>);
-BM_func(BM_set_inc, set2<size_t>);
-BM_func(BM_set_inc, pset<size_t>);
+BM_func(insert_incremental, std::set<size_t>);
+BM_func(insert_incremental, set2<size_t>);
+BM_func(insert_incremental, pset<size_t>);
 
 
 template<typename S>
-void BM_set_inc_hint(benchmark::State& state) {
+void BM_insert_hint_incremental(benchmark::State& state) {
     auto n_vals = state.range(0);
 
     for (auto _: state) {
@@ -208,13 +205,13 @@ void BM_set_inc_hint(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_inc_hint, std::set<size_t>);
-BM_func(BM_set_inc_hint, set2<size_t>);
-BM_func(BM_set_inc_hint, pset<size_t>);
+BM_func(insert_hint_incremental, std::set<size_t>);
+BM_func(insert_hint_incremental, set2<size_t>);
+BM_func(insert_hint_incremental, pset<size_t>);
 
 
 template<typename S>
-void BM_set_dec(benchmark::State& state) {
+void BM_insert_decremental(benchmark::State& state) {
     for (auto _: state) {
         S vals;
 
@@ -223,13 +220,13 @@ void BM_set_dec(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_dec, std::set<size_t>);
-BM_func(BM_set_dec, set2<size_t>);
-BM_func(BM_set_dec, pset<size_t>);
+BM_func(insert_decremental, std::set<size_t>);
+BM_func(insert_decremental, set2<size_t>);
+BM_func(insert_decremental, pset<size_t>);
 
 
 template<typename S>
-void BM_set_dec_hint(benchmark::State& state) {
+void BM_insert_hint_decremental(benchmark::State& state) {
     auto n_vals = state.range(0);
 
     for (auto _: state) {
@@ -241,13 +238,13 @@ void BM_set_dec_hint(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_dec_hint, std::set<size_t>);
-BM_func(BM_set_dec_hint, set2<size_t>);
-BM_func(BM_set_dec_hint, pset<size_t>);
+BM_func(insert_hint_decremental, std::set<size_t>);
+BM_func(insert_hint_decremental, set2<size_t>);
+BM_func(insert_hint_decremental, pset<size_t>);
 
 
 template<typename S>
-void BM_set_random(benchmark::State& state) {
+void BM_insert_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> distribution(0,n_vals*3);
@@ -261,13 +258,13 @@ void BM_set_random(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_random, std::set<size_t>);
-BM_func(BM_set_random, set2<size_t>);
-BM_func(BM_set_random, pset<size_t>);
+BM_func(insert_random, std::set<size_t>);
+BM_func(insert_random, set2<size_t>);
+BM_func(insert_random, pset<size_t>);
 
 
 template<typename S>
-void BM_set_random_hint(benchmark::State& state) {
+void BM_insert_hint_random(benchmark::State& state) {
     auto n_vals = state.range(0);
     std::default_random_engine generator(state.range(0));
     std::uniform_int_distribution<size_t> distribution(0,n_vals*3);
@@ -282,9 +279,9 @@ void BM_set_random_hint(benchmark::State& state) {
         }
     }
 }
-BM_func(BM_set_random_hint, std::set<size_t>);
-BM_func(BM_set_random_hint, set2<size_t>);
-BM_func(BM_set_random_hint, pset<size_t>);
+BM_func(insert_hint_random, std::set<size_t>);
+BM_func(insert_hint_random, set2<size_t>);
+BM_func(insert_hint_random, pset<size_t>);
 
 
 BENCHMARK_MAIN();
