@@ -12,7 +12,10 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 add_library(curly INTERFACE)
 target_include_directories(curly INTERFACE "${CMAKE_CURRENT_LIST_DIR}/include")
 
-OPTION(CXX_VERSION "C++ version" 17)
+OPTION(CXX_VERSION "C++ version" OFF)
+if(CXX_VERSION STREQUAL OFF)
+    SET(CXX_VERSION 17)
+endif()
 
 add_subdirectory(test)
 add_subdirectory(benchmark)
