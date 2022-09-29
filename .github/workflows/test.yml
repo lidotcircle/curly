@@ -23,7 +23,14 @@ jobs:
             printf "::set-output name=release::%s\n" "$release"
 
       - name: install packages
-        run: sudo apt-get install -y cmake clang valgrind python3
+        run: sudo apt-get install -y cmake clang valgrind python3 unifdef
+
+      - name: purge preprocessor if directives to get different versions
+        run: |
+          unifdef -o include/rbtree_11.hpp -D__cplusplus=201103 include/rbtree.hpp
+          unifdef -o include/rbtree_14.hpp -D__cplusplus=201402 include/rbtree.hpp
+          unifdef -o include/rbtree_17.hpp -D__cplusplus=201703 include/rbtree.hpp
+          unifdef -o include/rbtree_20.hpp -D__cplusplus=202002 include/rbtree.hpp
 
       - name: Release Build
         run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
@@ -43,7 +50,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "./build/benchmark/*.png"
+          artifacts: "./build/benchmark/*.png,./include/*.hpp"
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.release.outputs.release }}
 
