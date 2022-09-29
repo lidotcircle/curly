@@ -5,6 +5,9 @@
 #include <memory>
 #include <stdexcept>
 #include <limits>
+#if __cplusplus >= 202002
+#include <concepts>
+#endif // __cplusplus >= 202002
 
 
 #ifdef DEBUG
@@ -24,18 +27,31 @@ struct is_same_value_type:
         typename std::remove_reference<typename std::remove_const<typename std::remove_reference<T1>::type>::type>::type,
         typename std::remove_reference<typename std::remove_const<typename std::remove_reference<T2>::type>::type>::type
     > {};
+#if __cplusplus >= 202002
+template <typename T1, typename T2>
+concept C_is_same_value_type = is_same_value_type<T1,T2>::value;
+#endif // __cplusplus >= 202002
 
 template<typename K, typename V>
 struct RBTreeValueKV: public std::pair<const K,V> {
 public:
+    using key_type = K;
     using storage_type = std::pair<const K,V>;
 
     RBTreeValueKV() = delete;
 
+#if __cplusplus >= 202002
+    template<typename T>
+        requires ( std::constructible_from<std::pair<const K,V>, T&&> )
+#else
     template<typename T, typename std::enable_if<!std::is_convertible<T,RBTreeValueKV>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
     RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
 
     template<typename T1, typename T2>
+ #if __cplusplus >= 202002
+        requires ( std::constructible_from<const K,T1&&> && std::constructible_from<V,T2&&> )
+#endif // __cplusplus >= 202002
     RBTreeValueKV(T1&& v1, T2&& v2): std::pair<const K,V>(std::forward<T1>(v1), std::forward<T2>(v2)) {}
 
     RBTreeValueKV(const RBTreeValueKV&) = default;
@@ -74,16 +90,27 @@ template<typename K>
 struct RBTreeValueK {
 public:
     const K key;
+    using key_type = K;
     using storage_type = const K;
 
     RBTreeValueK() = delete;
+#if __cplusplus >= 202002
+    template<typename T> requires std::constructible_from<K,T&&>
+#else
     template<typename T, typename std::enable_if<std::is_convertible<T,K>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
     RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
 
     template<typename T1, typename T2>
+#if __cplusplus >= 202002
+        requires std::constructible_from<K, T1&&, T2&&>
+#endif // __cplusplus >= 202002
     RBTreeValueK(T1&& k, T2&& v2): key(std::forward<T1>(k), std::forward<T2>(v2)) {}
 
     template<typename T1, typename T2, typename ... Args>
+#if __cplusplus >= 202002
+        requires std::constructible_from<K, T1&&, T2&&, Args&&...>
+#endif // __cplusplus >= 202002
     RBTreeValueK(T1&& k, T2&& v2, Args ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
 
     RBTreeValueK(const RBTreeValueK&) = default;
@@ -111,68 +138,135 @@ struct IsRBTreeValueK: std::false_type {};
 template<typename K>
 struct IsRBTreeValueK<RBTreeValueK<K>>: std::true_type {};
 
+#if __cplusplus >= 202002
+template <typename T>
+concept C_RBTreeValueKV = IsRBTreeValueKV<T>::value;
+template <typename T>
+concept C_RBTreeValueK = IsRBTreeValueK<T>::value;
+template <typename Compare, typename T>
+concept C_RBTreeValueCompare = std::predicate<Compare, const typename T::key_type&,const typename T::key_type&>;
+#endif // __cplusplus >= 202002
 
+
+#if __cplusplus >= 202002
+template <C_RBTreeValueKV T, C_RBTreeValueCompare<T> Compare>
+#else
 template<typename T, typename Compare, typename std::enable_if<IsRBTreeValueKV<T>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T& v1, const T& v2) {
     return cmp(v1.first,v2.first);
 }
+
+#if __cplusplus >= 202002
+template<C_RBTreeValueKV T1, typename T2, C_RBTreeValueCompare<T1> Compare> requires ( !C_RBTreeValueKV<T2> )
+#else
 template<
     typename T1, typename T2, typename Compare,
     typename std::enable_if<IsRBTreeValueKV<T1>::value && !IsRBTreeValueKV<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
     return cmp(v1.first,v2);
 }
+
+#if __cplusplus >= 202002
+template<typename T1, C_RBTreeValueKV T2, C_RBTreeValueCompare<T2> Compare> requires ( !C_RBTreeValueKV<T1> )
+#else
 template<
     typename T1, typename T2, typename Compare,
     typename std::enable_if<!IsRBTreeValueKV<T1>::value && IsRBTreeValueKV<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
     return cmp(v1,v2.first);
 }
+
+#if __cplusplus >= 202002
+template<C_RBTreeValueK T, C_RBTreeValueCompare<T> Compare>
+#else
 template<typename T, typename Compare, typename std::enable_if<IsRBTreeValueK<T>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T& v1, const T& v2) {
     return cmp(v1.key,v2.key);
 }
+
+#if __cplusplus >= 202002
+template<C_RBTreeValueK T1, typename T2, C_RBTreeValueCompare<T1> Compare> requires ( !C_RBTreeValueK<T2> )
+#else
 template<
     typename T1, typename T2, typename Compare,
     typename std::enable_if<IsRBTreeValueK<T1>::value && !IsRBTreeValueK<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
     return cmp(v1.key,v2);
 }
+
+#if __cplusplus >= 202002
+template<typename T1, C_RBTreeValueK T2, C_RBTreeValueCompare<T2> Compare> requires ( !C_RBTreeValueK<T1> )
+#else
 template<
     typename T1, typename T2, typename Compare,
     typename std::enable_if<!IsRBTreeValueK<T1>::value && IsRBTreeValueK<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_compare(Compare cmp, const T1& v1, const T2& v2) {
     return cmp(v1,v2.key);
 }
+
+#if __cplusplus >= 202002
+template <C_RBTreeValueKV T>
+#else
 template<typename T, typename std::enable_if<IsRBTreeValueKV<T>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T& v1, const T& v2) {
     return v1.first == v2.first;
 }
+
+#if __cplusplus >= 202002
+template<C_RBTreeValueKV T1, typename T2> requires ( !C_RBTreeValueKV<T2> )
+#else
 template<
     typename T1, typename T2,
     typename std::enable_if<IsRBTreeValueKV<T1>::value && !IsRBTreeValueKV<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T1& v1, const T2& v2) {
     return v1.first == v2;
 }
+
+#if __cplusplus >= 202002
+template<typename T1, C_RBTreeValueKV T2> requires ( !C_RBTreeValueKV<T1> )
+#else
 template<
     typename T1, typename T2,
     typename std::enable_if<!IsRBTreeValueKV<T1>::value && IsRBTreeValueKV<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T1& v1, const T2& v2) {
     return v1 == v2.first;
 }
+
+#if __cplusplus >= 202002
+template<C_RBTreeValueK T>
+#else
 template<typename T, typename std::enable_if<IsRBTreeValueK<T>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T& v1, const T& v2) {
     return v1.key == v2.key;
 }
+#if __cplusplus >= 202002
+template<C_RBTreeValueK T1, typename T2> requires ( !C_RBTreeValueK<T2> )
+#else
 template<
     typename T1, typename T2,
     typename std::enable_if<IsRBTreeValueK<T1>::value && !IsRBTreeValueK<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T1& v1, const T2& v2) {
     return v1.key == v2;
 }
+
+#if __cplusplus >= 202002
+template<typename T1, C_RBTreeValueK T2> requires ( !C_RBTreeValueK<T1> )
+#else
 template<
     typename T1, typename T2,
     typename std::enable_if<!IsRBTreeValueK<T1>::value && IsRBTreeValueK<T2>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 inline bool rbvalue_equal(const T1& v1, const T2& v2) {
     return v1 == v2.key;
 }
@@ -344,8 +438,11 @@ public:
 
         return i;
     }
-
+#if __cplusplus >= 202002
+    template<typename St> requires (!C_is_same_value_type<St,RBTreeNodeBasic>)
+#else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodeBasic>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
     RBTreeNodeBasic(St&& val):
         left(nullptr), right(nullptr), parent(nullptr),
         black(false), value(std::forward<St>(val))
@@ -361,7 +458,11 @@ template<typename S>
 struct RBTreeNode: public RBTreeNodeBasic<S,RBTreeNode<S>*> {
     using base_type = RBTreeNodeBasic<S,RBTreeNode<S>*>;
 
+#if __cplusplus >= 202002
+    template<typename St> requires (!C_is_same_value_type<St,RBTreeNode>)
+#else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNode>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
     RBTreeNode(St&& val): base_type(std::forward<St>(val)) {}
 };
 
@@ -475,7 +576,11 @@ public:
         return ans;
     }
 
+#if __cplusplus >= 202002
+    template<typename St> requires (!C_is_same_value_type<St,RBTreeNodePosInfo>)
+#else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodePosInfo>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
     RBTreeNodePosInfo(St&& val): base_type(std::forward<St>(val)), num_nodes(1) {}
 };
 
@@ -495,9 +600,18 @@ using default_compare_t = std::less<_Key>;
 template<typename _Key, typename _Value>
 using default_allocato_t = std::allocator<RBTreeNode<rbtree_storage_type<_Key,_Value>>>;
 
+#if __cplusplus >= 202002
+template<typename Compare, typename Key>
+concept C_KeyCompare = std::predicate<Compare,Key,Key>;
+#endif // __cplusplus >= 202002
+
 template<
     typename _Key, typename _Value, bool multi, bool keep_position_info=true,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 class RBTreeImpl {
     public:
@@ -506,11 +620,7 @@ class RBTreeImpl {
         using const_nodeptr_t = const_node_pointer<storage_type,keep_position_info>;
         using node_type = typename std::remove_pointer<nodeptr_t>::type;
         constexpr static bool PositionInformation = keep_position_info;
-#if __cplusplus >= 202002L
-        using storage_allocator_ = std::allocator_traits<Alloc>::rebind_alloc<node_type>;
-#else
-        using storage_allocator_ = typename Alloc::template rebind<node_type>::other;
-#endif // __cplusplus >= 202002L
+        using storage_allocator_ = typename std::allocator_traits<Alloc>::template rebind_alloc<node_type>;
 
     private:
         nodeptr_t root;
@@ -525,13 +635,13 @@ class RBTreeImpl {
         }
 
         inline void delete_node(nodeptr_t node) {
-#if __cplusplus >= 201703L
+#if __cplusplus >= 201703
             std::destroy_n(node, 1);
             this->allocator.deallocate(node, 1);
 #else
             node->~node_type();
             this->allocator.deallocate(node, 1);
-#endif // __cplusplus >= 201703L
+#endif // __cplusplus >= 201703
         }
 
         template<typename T1, typename T2>
@@ -1418,6 +1528,10 @@ template<typename T>
 struct IsRBTreeImpl : std::false_type {};
 template<typename T1, typename T2, bool V1, bool V2, typename T4, typename T5>
 struct IsRBTreeImpl<RBTreeImpl<T1,T2,V1,V2,T4,T5>> : std::true_type {};
+#if __cplusplus >= 202002
+template<typename T>
+concept C_RBTreeImpl = IsRBTreeImpl<T>::value;
+#endif // __cplusplus >= 202002
 
 
 template<bool reverse, bool const_iterator, typename RBTreeType>
@@ -1428,7 +1542,11 @@ struct DummyIterator {
     DummyIterator(std::weak_ptr<rbtree_t> tree, nodeptr_t node, size_t version) {}
 };
 
+#if __cplusplus >= 202002
+template<bool reverse, bool const_iterator, C_RBTreeImpl RBTreeType>
+#else
 template<bool reverse, bool const_iterator, typename RBTreeType, typename std::enable_if<IsRBTreeImpl<RBTreeType>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 class RBTreeImplIterator {
     public:
         using rbtree_t = RBTreeType;
@@ -1464,7 +1582,11 @@ class RBTreeImplIterator {
     protected:
         template<
             typename _Key, typename _Value, bool multi, bool kepp_position_info,
+#if __cplusplus >= 202002
+            C_KeyCompare<_Key> Compare,
+#else
             typename Compare,
+#endif // __cplusplus >= 202002
             typename Alloc>
         friend class generic_container;
 
@@ -1665,7 +1787,11 @@ class RBTreeImplIterator {
 };
 
 
+#if __cplusplus >= 202002
+template<bool reverse, bool const_iterator, C_RBTreeImpl RBTreeType>
+#else
 template<bool reverse, bool const_iterator, typename RBTreeType, typename std::enable_if<IsRBTreeImpl<RBTreeType>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
 RBTreeImplIterator<reverse,const_iterator,RBTreeType> 
 operator+(
         typename  std::iterator_traits<RBTreeImplIterator<reverse,const_iterator,RBTreeType>>::difference_type n,
@@ -1677,7 +1803,11 @@ operator+(
 
 template<
     typename _Key, typename _Value, bool multi, bool kepp_position_info,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 class generic_container {
     protected:
@@ -1716,35 +1846,54 @@ class generic_container {
             std::swap(oth.rbtree, this->rbtree);
         }
 
+#if __cplusplus >= 202002
+        template<std::forward_iterator InputIt>
+            requires std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>
+#else
         template<
             typename InputIt, 
             typename std::enable_if<
                 std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
-                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
+#endif // __cplusplus >= 202002
         generic_container(InputIt begin, InputIt end, const Compare& cmp = Compare(), const Alloc& alloc = Alloc()):
             rbtree(std::make_shared<rbtree_t>(cmp, alloc))
         {
             this->insert(begin, end);
         }
 
+#if __cplusplus >= 202002
+        template<std::forward_iterator InputIt>
+            requires std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>
+#else
         template<
             typename InputIt, 
             typename std::enable_if<
                 std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
-                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
+#endif // __cplusplus >= 202002
         generic_container(InputIt begin, InputIt end, const Alloc& alloc):
             rbtree(std::make_shared<rbtree_t>(alloc))
         {
             this->insert(begin, end);
         }
 
+#if __cplusplus >= 202002
+        template<typename T> requires std::convertible_to<T,rbtree_storage_type_base>
+#else
         template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
         generic_container(std::initializer_list<T> init, const Compare& cmp = {}, const Alloc& alloc = {}): rbtree(std::make_shared<rbtree_t>(cmp, alloc)) {
             this->insert(init);
         }
+
+#if __cplusplus >= 202002
+        template<typename T> requires std::convertible_to<T,rbtree_storage_type_base>
+#else
         template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
         generic_container(std::initializer_list<T> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
             this->insert(init);
         }
@@ -1863,17 +2012,26 @@ class generic_container {
             return this->emplace_hint(hint, std::forward<ValType>(val));
         }
 
+#if __cplusplus >= 202002
+        template<std::forward_iterator InputIt>
+            requires (std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>)
+#else
         template<
             typename InputIt, 
             typename std::enable_if<
                 std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
-                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::input_iterator_tag>::value,
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
+#endif // __cplusplus >= 202002
         void insert(InputIt first, InputIt last) {
             for(;first != last;first++) this->insert(*first);
         }
 
+#if __cplusplus >= 202002
+        template<typename T> requires std::convertible_to<T, rbtree_storage_type>
+#else
         template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+#endif // __cplusplus >= 202002
         inline void insert(std::initializer_list<T> list) {
             this->insert(list.begin(), list.end());
         }
@@ -1981,14 +2139,18 @@ bool operator!=(const generic_container<_Key,_Value,multi,kepp_position_info,Com
 
 template<
     typename _Key, typename _Value, bool multi, bool kepp_position_info,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
-    typename Alloc = default_allocato_t<_Key,_Value>,
-    typename std::enable_if<!std::is_same<_Value,void>::value,bool>::type = true>
+#endif // __cplusplus >= 202002
+    typename Alloc = default_allocato_t<_Key,_Value>>
 class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc> {
     private:
         using base_t = generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>;
 
     public:
+        static_assert(!std::is_same<_Value,void>::value, "value_type must not be void");
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
         using rbtree_storage_type_base = typename base_t::rbtree_storage_type_base;
         using iterator_t = typename base_t::iterator_t;
@@ -2015,7 +2177,11 @@ class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info
 
 template<
     typename _Key, bool multi, bool kepp_position_info,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
 class generic_set: public generic_container<_Key,void,multi,kepp_position_info,Compare,Alloc> {
     private:
@@ -2043,7 +2209,11 @@ class generic_set: public generic_container<_Key,void,multi,kepp_position_info,C
 
 template<
     typename _Key, typename _Value, bool kepp_position_info,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Compare,Alloc> {
     private:
@@ -2095,50 +2265,82 @@ class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Co
 
 template<
     typename _Key,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
 using set2 = generic_set<_Key,false,false,Compare,Alloc>;
 
 template<
     typename _Key,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
 using pset = generic_set<_Key,false,true,Compare,Alloc>;
 
 template<
     typename _Key,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
 using multiset2 = generic_set<_Key,true,false,Compare,Alloc>;
 
 template<
     typename _Key,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
 using pmultiset = generic_set<_Key,true,true,Compare,Alloc>;
 
 
 template<
     typename _Key, typename _Value,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 using multimap2 = generic_map<_Key,_Value,true,false,Compare,Alloc>;
 
 template<
     typename _Key, typename _Value,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 using pmultimap = generic_map<_Key,_Value,true,true,Compare,Alloc>;
 
 template<
     typename _Key, typename _Value,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 using map2 = generic_unimap<_Key,_Value,false,Compare,Alloc>;
 
 template<
     typename _Key, typename _Value,
+#if __cplusplus >= 202002
+    C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
+#else
     typename Compare = default_compare_t<_Key>,
+#endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 using pmap = generic_unimap<_Key,_Value,true,Compare,Alloc>;
 }
