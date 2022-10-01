@@ -270,6 +270,19 @@ static void set_extract_insert(int mvals) {
 }
 #endif // __cplusplus >= 201703L
 
+#if __cplusplus >= 202002L
+template <typename M>
+static void set_merge(int mvals) {
+    M m1 = SetupSet<M>(mvals);
+    M m2 = m1;
+
+    size_t sumx = m1.size() + m2.size();
+    m1.merge(m2);
+    ASSERT_EQ(sumx, m1.size() + m2.size());
+}
+#endif // __cplusplus >= 202002L
+
+
 #define test(name) \
     TEST(set, name) { \
         set_##name<std::set<int>>(1000); \
@@ -291,3 +304,6 @@ test(equality);
 #if __cplusplus >= 201703L
 test(extract_insert);
 #endif // __cplusplus >= 201703L
+#if __cplusplus >= 202002L
+test(merge);
+#endif // __cplusplus >= 202002L

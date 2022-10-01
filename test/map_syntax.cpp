@@ -277,6 +277,41 @@ static void map_equality(int mvals) {
     ASSERT_TRUE(m2 != m1);
 }
 
+#if __cplusplus >= 201703L
+template <typename M>
+static void map_extract_insert(int mvals) {
+    M m1 = setupmap<M>(mvals);
+    M m2;
+    M m3 = m1;
+
+    auto hint = m1.begin();
+    for(size_t i=0;!m1.empty();i++) {
+        auto node = m1.extract(m1.begin());
+        ASSERT_TRUE(node);
+        if (i % 2 == 0) {
+            hint = m2.insert(std::move(node)).position;
+        } else {
+            hint = m2.insert(hint, std::move(node));
+        }
+    }
+
+    ASSERT_EQ(m2, m3);
+}
+#endif // __cplusplus >= 201703L
+
+#if __cplusplus >= 202002L
+template <typename M>
+static void map_merge(int mvals) {
+    M m1 = setupmap<M>(mvals);
+    M m2 = m1;
+
+    size_t sumx = m1.size() + m2.size();
+    m1.merge(m2);
+    ASSERT_EQ(sumx, m1.size() + m2.size());
+}
+#endif // __cplusplus >= 202002L
+
+
 #define test(name) \
     TEST(map, name) { \
         map_##name<std::map<int,int>>(1000); \
@@ -296,3 +331,9 @@ test(swap);
 test(lookup);
 test(access);
 test(equality);
+#if __cplusplus >= 201703L
+test(extract_insert);
+#endif // __cplusplus >= 201703L
+#if __cplusplus >= 202002L
+test(merge);
+#endif // __cplusplus >= 202002L

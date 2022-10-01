@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <utility>
 #include <iterator>
 #include <type_traits>
@@ -408,8 +409,6 @@ public:
     }
 
     void update_position_info(nodeptr_t to) {
-        RB_ASSERT(false && "never call this function");
-        throw std::logic_error("not implement");
     }
 
     const_nodeptr_t advance(long n) const {
@@ -439,6 +438,70 @@ public:
 
         return i;
     }
+
+    nodeptr_t flatten2List() {
+        RB_ASSERT(this->parent == nullptr);
+        auto node = this->minimum();
+        auto head = node;
+
+        for(;node!=nullptr;) {
+            decltype(node) next = nullptr;
+
+            if (node->right) {
+                next = node->right->minimum();
+            } else {
+                for (next=node;next;next=next->parent) {
+                    if (next->parent && next->parent->left == next) {
+                        next = next->parent;
+                        break;
+                    }
+                }
+            }
+
+            node->right = next;
+            node = next;
+        }
+
+        return head;
+    }
+
+    nodeptr_t fromList() {
+        auto head = static_cast<nodeptr_t>(this);
+        size_t size = 0;
+        for (auto node=head;node!=nullptr;node=node->right,size++);
+
+        size_t max_depth = 0;
+        for (;(1<<max_depth) < size;max_depth++);
+        bool always_black = (1<<max_depth) == size;
+
+        auto node = head;
+        const std::function<nodeptr_t(long,long,size_t)> inorderHelper = 
+            [&inorderHelper, max_depth, &node, always_black](long start, long end, size_t depth) -> nodeptr_t
+        {
+            if (start > end) return nullptr;
+
+            int mid = start + (end - start) / 2;
+            auto left = inorderHelper(start, mid-1, depth+1);
+
+            auto pn = node;
+            node = node->right;
+
+            auto right = inorderHelper(mid+1, end, depth+1);
+
+            if (left) left->parent = pn;
+            if (right) right->parent = pn;
+            pn->left = left;
+            pn->right = right;
+            pn->black = always_black || depth != max_depth;
+            pn->update_position_info(pn->parent);
+            return pn;
+        };
+
+        auto root = inorderHelper(0, size - 1, 0);
+        root->parent = nullptr;
+        return root;
+    }
+
 #if __cplusplus >= 202002
     template<typename St> requires (!C_is_same_value_type<St,RBTreeNodeBasic>)
 #else
@@ -1538,6 +1601,21 @@ class RBTreeImpl {
             this->_size = 0;
         }
 
+        void convert2BST() {
+            if (this->root == nullptr) return;
+
+            auto head = this->root->flatten2List();
+            this->root = head->fromList();
+        }
+
+        void construct_from_nodelist(nodeptr_t head) {
+            this->clear();
+            size_type size = 0;
+            for (auto h=head;h!=nullptr;h=h->right,size++) {}
+            this->root = head->fromList();
+            this->_size = size;
+        }
+
         RBTreeImpl(): root(nullptr), _version(0), _size(0) {
         }
         RBTreeImpl(const Compare& cmp, const Alloc& alloc): root(nullptr), _version(0), _size(0), cmp(cmp), allocator(alloc) {
@@ -1608,7 +1686,7 @@ class RBTreeImplIterator {
 
     protected:
         template<
-            typename _Key, typename _Value, bool multi, bool kepp_position_info,
+            typename _Key, typename _Value, bool multi, bool keep_position_info,
 #if __cplusplus >= 202002
             C_KeyCompare<_Key> Compare,
 #else
@@ -1829,7 +1907,7 @@ operator+(
 
 
 template<
-    typename _Key, typename _Value, bool multi, bool kepp_position_info,
+    typename _Key, typename _Value, bool multi, bool keep_position_info,
 #if __cplusplus >= 202002
     C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
 #else
@@ -1838,7 +1916,7 @@ template<
     typename Alloc = default_allocato_t<_Key,_Value>>
 class generic_container {
     protected:
-        using rbtree_t = RBTreeImpl<_Key,_Value,multi,kepp_position_info,Compare,Alloc>;
+        using rbtree_t = RBTreeImpl<_Key,_Value,multi,keep_position_info,Compare,Alloc>;
         std::shared_ptr<rbtree_t> rbtree;
 
     public:
@@ -2366,6 +2444,42 @@ class generic_container {
             }
         }
 
+        template <typename C2, bool m>
+        inline void merge(generic_container<_Key,_Value,m,keep_position_info,C2,Alloc>&& source) {
+            this->merge(source);
+        }
+
+        template <typename C2, bool m>
+        void merge(generic_container<_Key,_Value,m,keep_position_info,C2,Alloc>& source) {
+            if (this->get_allocator() != source.get_allocator()) {
+                throw std::logic_error("allocators don't equal");
+            }
+
+            decltype(((node_type*)nullptr)->get()) head = nullptr;
+            auto node = head;
+            size_t n_not_inserted = 0;
+            for (;!source.empty();) {
+                auto ext_node = source.extract(source.begin());
+                auto result = this->insert(std::move(ext_node));
+                if (!result.inserted) {
+                    n_not_inserted++;
+                    auto n = result.node.get();
+                    if (node) {
+                        node->right = n;
+                        node = n;
+                    } else {
+                        head = n;
+                        node = n;
+                    }
+                    node->right = nullptr;
+                }
+            }
+
+            if (head != nullptr) {
+                source.rbtree->construct_from_nodelist(head);
+            }
+        }
+
         void swap(generic_container& oth) noexcept {
             std::swap(this->rbtree, oth.rbtree);
         }
@@ -2376,9 +2490,9 @@ class generic_container {
 };
 
 
-template<typename _Key, typename _Value, bool multi, bool kepp_position_info, typename Compare, typename Alloc>
-bool operator==(const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& lhs,
-                const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& rhs)
+template<typename _Key, typename _Value, bool multi, bool keep_position_info, typename Compare, typename Alloc>
+bool operator==(const generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc>& lhs,
+                const generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc>& rhs)
 {
     if (lhs.size() != rhs.size()) return false;
 
@@ -2391,25 +2505,25 @@ bool operator==(const generic_container<_Key,_Value,multi,kepp_position_info,Com
     return true;
 }
 
-template<typename _Key, typename _Value, bool multi, bool kepp_position_info, typename Compare, typename Alloc>
-bool operator!=(const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& lhs,
-                const generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>& rhs)
+template<typename _Key, typename _Value, bool multi, bool keep_position_info, typename Compare, typename Alloc>
+bool operator!=(const generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc>& lhs,
+                const generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc>& rhs)
 {
     return !operator==(lhs, rhs);
 }
 
 
 template<
-    typename _Key, typename _Value, bool multi, bool kepp_position_info,
+    typename _Key, typename _Value, bool multi, bool keep_position_info,
 #if __cplusplus >= 202002
     C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
 #else
     typename Compare = default_compare_t<_Key>,
 #endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
-class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc> {
+class generic_map: public generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc> {
     private:
-        using base_t = generic_container<_Key,_Value,multi,kepp_position_info,Compare,Alloc>;
+        using base_t = generic_container<_Key,_Value,multi,keep_position_info,Compare,Alloc>;
 
     public:
         static_assert(!std::is_same<_Value,void>::value, "_Value must not be void");
@@ -2452,16 +2566,16 @@ class generic_map: public generic_container<_Key,_Value,multi,kepp_position_info
 
 
 template<
-    typename _Key, bool multi, bool kepp_position_info,
+    typename _Key, bool multi, bool keep_position_info,
 #if __cplusplus >= 202002
     C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
 #else
     typename Compare = default_compare_t<_Key>,
 #endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,void>>
-class generic_set: public generic_container<_Key,void,multi,kepp_position_info,Compare,Alloc> {
+class generic_set: public generic_container<_Key,void,multi,keep_position_info,Compare,Alloc> {
     private:
-        using base_t = generic_container<_Key,void,multi,kepp_position_info,Compare,Alloc>;
+        using base_t = generic_container<_Key,void,multi,keep_position_info,Compare,Alloc>;
 
     public:
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
@@ -2497,16 +2611,16 @@ class generic_set: public generic_container<_Key,void,multi,kepp_position_info,C
 
 
 template<
-    typename _Key, typename _Value, bool kepp_position_info,
+    typename _Key, typename _Value, bool keep_position_info,
 #if __cplusplus >= 202002
     C_KeyCompare<_Key> Compare = default_compare_t<_Key>,
 #else
     typename Compare = default_compare_t<_Key>,
 #endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
-class generic_unimap: public generic_map<_Key,_Value,false,kepp_position_info,Compare,Alloc> {
+class generic_unimap: public generic_map<_Key,_Value,false,keep_position_info,Compare,Alloc> {
     private:
-        using base_t = generic_map<_Key,_Value,false,kepp_position_info,Compare,Alloc>;
+        using base_t = generic_map<_Key,_Value,false,keep_position_info,Compare,Alloc>;
 
     public:
         using rbtree_storage_type = typename base_t::rbtree_storage_type;
