@@ -248,6 +248,28 @@ static void set_equality(int mvals) {
     ASSERT_TRUE(m2 != m1);
 }
 
+#if __cplusplus >= 201703L
+template <typename M>
+static void set_extract_insert(int mvals) {
+    M m1 = SetupSet<M>(mvals);
+    M m2;
+    M m3 = m1;
+
+    auto hint = m1.begin();
+    for(size_t i=0;!m1.empty();i++) {
+        auto node = m1.extract(m1.begin());
+        ASSERT_TRUE(node);
+        if (i % 2 == 0) {
+            hint = m2.insert(std::move(node)).position;
+        } else {
+            hint = m2.insert(hint, std::move(node));
+        }
+    }
+
+    ASSERT_EQ(m2, m3);
+}
+#endif // __cplusplus >= 201703L
+
 #define test(name) \
     TEST(set, name) { \
         set_##name<std::set<int>>(1000); \
@@ -266,3 +288,6 @@ test(erase);
 test(swap);
 test(lookup);
 test(equality);
+#if __cplusplus >= 201703L
+test(extract_insert);
+#endif // __cplusplus >= 201703L
