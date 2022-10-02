@@ -45,6 +45,9 @@ jobs:
           export CC=$(which clang-15) && export CXX=$(which clang++-15) && \
           mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCXX_VERSION=17 && make
 
+      - name: run clang-tidy
+        run: if (clang-tidy-15 -p build include/rbtree.hpp  | grep -e 'warning'); then  false; else true; fi
+
       - name: setup python dependencies
         run: cd tools/google_benchmark_plot && python3 -m pip install -r ./requirements.txt
 

@@ -46,14 +46,14 @@ public:
 
 #if __cplusplus >= 202002
     template<typename T>
-        requires ( std::constructible_from<std::pair<const K,V>, T&&> )
+        requires ( std::constructible_from<storage_type_base,T&&> )
 #else
-    template<typename T, typename std::enable_if<!std::is_convertible<T,RBTreeValueKV>::value,bool>::type = true>
+    template<typename T, typename std::enable_if<std::is_constructible<storage_type_base,T&&>::value,bool>::type = true>
 #endif // __cplusplus >= 202002
-    RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
+    explicit RBTreeValueKV(T&& v): std::pair<const K,V>(std::forward<T>(v)) {}
 
     template<typename T1, typename T2>
- #if __cplusplus >= 202002
+#if __cplusplus >= 202002
         requires ( std::constructible_from<const K,T1&&> && std::constructible_from<V,T2&&> )
 #endif // __cplusplus >= 202002
     RBTreeValueKV(T1&& v1, T2&& v2): std::pair<const K,V>(std::forward<T1>(v1), std::forward<T2>(v2)) {}
@@ -99,11 +99,11 @@ public:
 
     RBTreeValueK() = delete;
 #if __cplusplus >= 202002
-    template<typename T> requires std::constructible_from<K,T&&>
+    template<typename T> requires std::constructible_from<storage_type_base,T&&>
 #else
-    template<typename T, typename std::enable_if<std::is_convertible<T,K>::value,bool>::type = true>
+    template<typename T, typename std::enable_if<std::is_constructible<storage_type_base,T&&>::value,bool>::type = true>
 #endif // __cplusplus >= 202002
-    RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
+    explicit RBTreeValueK(T&& k): key(std::forward<T>(k)) {}
 
     template<typename T1, typename T2>
 #if __cplusplus >= 202002
@@ -510,7 +510,7 @@ public:
 #else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodeBasic>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
-    RBTreeNodeBasic(St&& val):
+    explicit RBTreeNodeBasic(St&& val):
         left(nullptr), right(nullptr), parent(nullptr),
         black(false), value(std::forward<St>(val))
     {}
@@ -530,7 +530,7 @@ struct RBTreeNode: public RBTreeNodeBasic<S,RBTreeNode<S>*> {
 #else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNode>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
-    RBTreeNode(St&& val): base_type(std::forward<St>(val)) {}
+    explicit RBTreeNode(St&& val): base_type(std::forward<St>(val)) {}
 };
 
 template<typename S>
@@ -649,7 +649,7 @@ public:
 #else
     template<typename St, typename std::enable_if<!is_same_value_type<St,RBTreeNodePosInfo>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
-    RBTreeNodePosInfo(St&& val): base_type(std::forward<St>(val)), num_nodes(1) {}
+    explicit RBTreeNodePosInfo(St&& val): base_type(std::forward<St>(val)), num_nodes(1) {}
 };
 
 
@@ -707,7 +707,11 @@ class RBTreeImpl {
         Compare cmp;
         storage_allocator_ allocator;
 
-        template<typename ... Args>
+#if __cplusplus >= 202002
+        template<typename ... Args> requires std::constructible_from<rbtree_node_type,Args&&...>
+#else
+        template<typename ... Args, typename std::enable_if<std::is_constructible<rbtree_node_type,Args&&...>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         inline nodeptr_t construct_node(Args&& ... args) {
             auto ptr = this->allocator.allocate(1);
             return new (ptr) rbtree_node_type(std::forward<Args>(args)...);
@@ -1658,7 +1662,7 @@ class RBTreeImpl {
         }
         RBTreeImpl(const Compare& cmp, const Alloc& alloc): root(nullptr), _version(0), _size(0), cmp(cmp), allocator(alloc) {
         }
-        RBTreeImpl(const Alloc& alloc): root(nullptr), _version(0), _size(0), allocator(alloc) {
+        explicit RBTreeImpl(const Alloc& alloc): root(nullptr), _version(0), _size(0), allocator(alloc) {
         }
 
         ~RBTreeImpl() {
@@ -1757,6 +1761,7 @@ class RBTreeImplIterator {
             return this->node != nullptr;
         }
 
+        // NOLINTNEXTLINE
         operator const_iterator_alt_t() const {
             return const_iterator_alt_t(this->tree, this->node, this->version);
         }
@@ -2111,7 +2116,7 @@ class generic_container {
             using allocator_type = typename node_type_generic::allocator_type;
 
             template <typename ... Args>
-            node_type_set(Args&&... args): node_type_generic(std::forward<Args>(args)...) { }
+            explicit node_type_set(Args&&... args): node_type_generic(std::forward<Args>(args)...) { }
 
             value_type& value() const {
                 return const_cast<value_type&>(this->get_node().get());
@@ -2124,7 +2129,7 @@ class generic_container {
             using allocator_type = typename node_type_generic::allocator_type;
 
             template <typename ... Args>
-            node_type_map(Args&&... args): node_type_generic(std::forward<Args>(args)...) { }
+            explicit node_type_map(Args&&... args): node_type_generic(std::forward<Args>(args)...) { }
 
             key_type& key() const {
                 return const_cast<key_type&>(this->get_node().get().first);
@@ -2171,12 +2176,12 @@ class generic_container {
 
 #if __cplusplus >= 202002
         template<std::forward_iterator InputIt>
-            requires std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>
+            requires std::constructible_from<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>
 #else
         template<
             typename InputIt, 
             typename std::enable_if<
-                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_constructible<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>::value &&
                 std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
 #endif // __cplusplus >= 202002
@@ -2188,12 +2193,12 @@ class generic_container {
 
 #if __cplusplus >= 202002
         template<std::forward_iterator InputIt>
-            requires std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>
+            requires std::constructible_from<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>
 #else
         template<
             typename InputIt, 
             typename std::enable_if<
-                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_constructible<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>::value &&
                 std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
 #endif // __cplusplus >= 202002
@@ -2204,18 +2209,18 @@ class generic_container {
         }
 
 #if __cplusplus >= 202002
-        template<typename T> requires std::convertible_to<T,rbtree_storage_type_base>
+        template<typename T> requires std::constructible_from<rbtree_storage_type,T>
 #else
-        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        template<typename T, typename std::enable_if<std::is_constructible<rbtree_storage_type,T>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
         generic_container(std::initializer_list<T> init, const Compare& cmp = {}, const Alloc& alloc = {}): rbtree(std::make_shared<rbtree_t>(cmp, alloc)) {
             this->insert(init);
         }
 
 #if __cplusplus >= 202002
-        template<typename T> requires std::convertible_to<T,rbtree_storage_type_base>
+        template<typename T> requires std::constructible_from<rbtree_storage_type,T>
 #else
-        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        template<typename T, typename std::enable_if<std::is_constructible<rbtree_storage_type,T>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
         generic_container(std::initializer_list<T> init, const Alloc& alloc): rbtree(std::make_shared<rbtree_t>(alloc)) {
             this->insert(init);
@@ -2321,20 +2326,32 @@ class generic_container {
         inline bool empty() const { return this->size() == 0; }
         inline size_t max_size() const noexcept { return std::numeric_limits<size_t>::max(); }
 
-        template<typename ValType>
+#if __cplusplus >= 202002
+        template<typename ValType> requires std::constructible_from<value_type,ValType&&>
+#else
+        template<typename ValType, typename std::enable_if<std::is_constructible<value_type,ValType&&>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         std::pair<iterator,bool> insert(ValType&& val)
         {
             auto result = this->rbtree->insert(std::forward<ValType>(val));
             return make_pair(iterator(this->rbtree, result.first, this->rbtree->version()), result.second);
         }
 
-        template<typename ValType>
+#if __cplusplus >= 202002
+        template<typename ValType> requires std::constructible_from<value_type,ValType&&>
+#else
+        template<typename ValType, typename std::enable_if<std::is_constructible<value_type,ValType>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         iterator insert(iterator hint, ValType&& val)
         {
             return this->emplace_hint(hint, std::forward<ValType>(val));
         }
 
-        template<typename ValType>
+#if __cplusplus >= 202002
+        template<typename ValType> requires std::constructible_from<value_type,ValType&&>
+#else
+        template<typename ValType, typename std::enable_if<std::is_constructible<value_type,ValType>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         iterator insert(const_iterator hint, ValType&& val)
         {
             return this->emplace_hint(hint, std::forward<ValType>(val));
@@ -2342,12 +2359,12 @@ class generic_container {
 
 #if __cplusplus >= 202002
         template<std::forward_iterator InputIt>
-            requires (std::convertible_to<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>)
+            requires std::constructible_from<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>
 #else
         template<
             typename InputIt, 
             typename std::enable_if<
-                std::is_convertible<typename std::iterator_traits<InputIt>::value_type,rbtree_storage_type_base>::value &&
+                std::is_constructible<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>::value &&
                 std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
                 bool>::type = true>
 #endif // __cplusplus >= 202002
@@ -2356,9 +2373,9 @@ class generic_container {
         }
 
 #if __cplusplus >= 202002
-        template<typename T> requires std::convertible_to<T, rbtree_storage_type>
+        template<typename T> requires std::constructible_from<rbtree_storage_type,T>
 #else
-        template<typename T, typename std::enable_if<std::is_convertible<T,rbtree_storage_type_base>::value, bool>::type = true>
+        template<typename T, typename std::enable_if<std::is_constructible<rbtree_storage_type,T>::value, bool>::type = true>
 #endif // __cplusplus >= 202002
         inline void insert(std::initializer_list<T> list) {
             this->insert(list.begin(), list.end());
@@ -2395,13 +2412,21 @@ class generic_container {
             return this->insert(const_iterator(hint), std::move(nh));
         }
 
-        template< class... Args >
+#if __cplusplus >= 202002
+        template<typename ... Args> requires std::constructible_from<value_type,Args&&...>
+#else
+        template<typename ... Args, typename std::enable_if<std::is_constructible<value_type,Args&&...>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         inline std::pair<iterator,bool> emplace( Args&&... args ){
             auto result = this->rbtree->emplace(nullptr, std::forward<Args>(args)...);
             return std::make_pair(iterator(this->rbtree, result.first, this->rbtree->version()), result.second);
         }
 
-        template< class... Args >
+#if __cplusplus >= 202002
+        template<typename ... Args> requires std::constructible_from<value_type,Args&&...>
+#else
+        template<typename ... Args, typename std::enable_if<std::is_constructible<value_type,Args&&...>::value,bool>::type = true>
+#endif // __cplusplu >= 202002
         iterator emplace_hint(const_iterator hint,  Args&&... args ){
             if (!hint.treeid()) {
                 throw std::logic_error("hint is an invalid iterator");
@@ -2449,7 +2474,7 @@ class generic_container {
             iterator ans = this->end();
             for (;first!=this->cend() && first!=last;) {
                 ans = this->erase(first);
-                first = ans;
+                first = const_iterator(ans);
                 last.sync_version();
             }
             return ans;
@@ -2470,7 +2495,7 @@ class generic_container {
             }
 
             auto extracted = this->rbtree->extract(node, false).first;
-            return node_type_generic(extracted, this->rbtree->get_allocator());
+            return node_type(extracted, this->rbtree->get_allocator());
         }
 
         node_type extract(const _Key& key) {
@@ -2488,11 +2513,17 @@ class generic_container {
         }
 
 #if __cplusplus >= 202002
-        template<std::forward_iterator Iter>
+        template<std::forward_iterator InputIt>
+            requires std::constructible_from<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>
 #else
-        template<typename Iter>
+        template<
+            typename InputIt, 
+            typename std::enable_if<
+                std::is_constructible<rbtree_storage_type,typename std::iterator_traits<InputIt>::value_type>::value &&
+                std::is_convertible<typename std::iterator_traits<InputIt>::iterator_category,std::forward_iterator_tag>::value,
+                bool>::type = true>
 #endif // __cplusplus >= 202002
-        inline bool emplace_asc(Iter begin, Iter end) {
+        inline bool emplace_asc(InputIt begin, InputIt end) {
             return this->rbtree->construct_from_asc_iter(begin, end);
         }
 
@@ -2502,7 +2533,7 @@ class generic_container {
                 throw std::logic_error("allocators don't equal");
             }
 
-            decltype(((node_type*)nullptr)->get()) head = nullptr;
+            decltype(static_cast<node_type*>(nullptr)->get()) head = nullptr;
             auto node = head;
             size_t n_not_inserted = 0;
             for (;!source.empty();) {
@@ -2597,6 +2628,7 @@ class generic_map: public generic_container<_Key,_Value,multi,keep_position_info
 
         generic_map() = default;
         template<typename ...Args>
+        // NOLINTNEXTLINE
         generic_map(Args&& ...args): base_t(std::forward<Args>(args)...) {}
 
         generic_map(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
@@ -2647,6 +2679,7 @@ class generic_set: public generic_container<_Key,void,multi,keep_position_info,C
 
         generic_set() = default;
         template<typename ...Args>
+        // NOLINTNEXTLINE
         generic_set(Args&& ...args): base_t(std::forward<Args>(args)...) {}
 
         generic_set(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
@@ -2693,6 +2726,7 @@ class generic_unimap: public generic_map<_Key,_Value,false,keep_position_info,Co
 
         generic_unimap() = default;
         template<typename ...Args>
+        // NOLINTNEXTLINE
         generic_unimap(Args&& ...args): base_t(std::forward<Args>(args)...) {}
 
         generic_unimap(std::initializer_list<rbtree_storage_type_base> init, const Compare& cmp = {}, const Alloc& alloc = {}): base_t(std::move(init), cmp, alloc) {
@@ -2822,6 +2856,6 @@ namespace pmr {
 
     template <class Key, class Value, class Compare = std::less<Key>>
     using pmultimap = pmultimap<Key, Value, Compare, ::std::pmr::polymorphic_allocator<Key>>;
-}
+} // namespace pmr
 #endif // __cplusplus >= 201703
-}
+} // namespace curly
