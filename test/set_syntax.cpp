@@ -283,15 +283,28 @@ static void set_merge(int mvals) {
 #endif // __cplusplus >= 202002L
 
 
-#define test(name) \
+#define test_inc_pmr(name) \
+    TEST(set, name) { \
+        set_##name<std::set<int>>(1000); \
+        set_##name<set2<int>>(1000); \
+        set_##name<pset<int>>(1000); \
+        set_##name<std::pmr::set<int>>(1000); \
+        set_##name<curly::pmr::pset<int>>(1000); \
+    }
+#define test_basic(name) \
     TEST(set, name) { \
         set_##name<std::set<int>>(1000); \
         set_##name<set2<int>>(1000); \
         set_##name<pset<int>>(1000); \
     }
+#if __cplusplus >= 201703L
+#define test(name) test_inc_pmr(name)
+#else
+#define test(name) test_basic(name)
+#endif // __cplusplus >= 201703L
 
 
-test(constructor);
+test_basic(constructor);
 test(assignment);
 test(iterator);
 test(capacity);

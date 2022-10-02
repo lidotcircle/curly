@@ -312,15 +312,28 @@ static void map_merge(int mvals) {
 #endif // __cplusplus >= 202002L
 
 
-#define test(name) \
+#define test_inc_pmr(name) \
+    TEST(map, name) { \
+        map_##name<std::map<int,int>>(1000); \
+        map_##name<map2<int,int>>(1000); \
+        map_##name<pmap<int,int>>(1000); \
+        map_##name<std::pmr::map<int,int>>(1000); \
+        map_##name<curly::pmr::pmap<int,int>>(1000); \
+    }
+#define test_basic(name) \
     TEST(map, name) { \
         map_##name<std::map<int,int>>(1000); \
         map_##name<map2<int,int>>(1000); \
         map_##name<pmap<int,int>>(1000); \
     }
+#if __cplusplus >= 201703L
+#define test(name) test_inc_pmr(name)
+#else
+#define test(name) test_basic(name)
+#endif // __cplusplus >= 201703L
 
 
-test(constructor);
+test_basic(constructor);
 test(assignment);
 test(iterator);
 test(capacity);

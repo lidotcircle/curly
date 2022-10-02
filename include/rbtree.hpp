@@ -6,6 +6,9 @@
 #include <memory>
 #include <stdexcept>
 #include <limits>
+#if __cplusplus >= 201703
+#include <memory_resource>
+#endif // __cplusplus >= 201703
 #if __cplusplus >= 202002
 #include <concepts>
 #endif // __cplusplus >= 202002
@@ -2760,4 +2763,21 @@ template<
 #endif // __cplusplus >= 202002
     typename Alloc = default_allocato_t<_Key,_Value>>
 using pmap = generic_unimap<_Key,_Value,true,Compare,Alloc>;
+
+
+#if __cplusplus >= 201703
+namespace pmr {
+    template <class Key, class Compare = std::less<Key>>
+    using pset = pset<Key, Compare, std::pmr::polymorphic_allocator<Key>>;
+
+    template <class Key, class Compare = std::less<Key>>
+    using pmultiset = pmultiset<Key, Compare, std::pmr::polymorphic_allocator<Key>>;
+
+    template <class Key, class Value, class Compare = std::less<Key>>
+    using pmap = pmap<Key, Value, Compare, ::std::pmr::polymorphic_allocator<Key>>;
+
+    template <class Key, class Value, class Compare = std::less<Key>>
+    using pmultimap = pmultimap<Key, Value, Compare, ::std::pmr::polymorphic_allocator<Key>>;
+}
+#endif // __cplusplus >= 201703
 }
