@@ -23,17 +23,27 @@ jobs:
             printf "::set-output name=release::%s\n" "$release"
 
       - name: install packages
-        run: sudo apt-get install -y cmake clang valgrind python3 unifdef
+        run: sudo apt-get install -y cmake valgrind python3 unifdef
 
-      - name: purge preprocessor if directives to get different versions
+      - name: install clang
         run: |
-          unifdef -o include/rbtree_11.hpp -D__cplusplus=201103 include/rbtree.hpp
-          unifdef -o include/rbtree_14.hpp -D__cplusplus=201402 include/rbtree.hpp
-          unifdef -o include/rbtree_17.hpp -D__cplusplus=201703 include/rbtree.hpp
-          unifdef -o include/rbtree_20.hpp -D__cplusplus=202002 include/rbtree.hpp
+          wget https://apt.llvm.org/llvm.sh && \
+            chmod +x llvm.sh && \
+            sudo ./llvm.sh 15 && \
+            sudo apt install clang-tidy && \
+            echo "clang-15: $(which clang-15), clang-tidy: $(which clang-tidy-15)" 
+
+      - name: purge preprocessor conditional directives to obtain different versions
+        run: |
+          unifdef -x 2 -o include/rbtree_11.hpp -D__cplusplus=201103 include/rbtree.hpp && \
+          unifdef -x 2 -o include/rbtree_14.hpp -D__cplusplus=201402 include/rbtree.hpp && \
+          unifdef -x 2 -o include/rbtree_17.hpp -D__cplusplus=201703 include/rbtree.hpp && \
+          unifdef -x 2 -o include/rbtree_20.hpp -D__cplusplus=202002 include/rbtree.hpp
 
       - name: Release Build
-        run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release && make
+        run: |
+          export CC=$(which clang-15) && export CXX=$(which clang++-15) && \
+          mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCXX_VERSION=17 && make
 
       - name: setup python dependencies
         run: cd tools/google_benchmark_plot && python3 -m pip install -r ./requirements.txt
@@ -60,17 +70,24 @@ jobs:
       - name: Memory Leak Detection
         run: cd build/test && for f in $(ls | grep '^test[^.]*$'); do echo "$f" &&  eval "valgrind ./$f" || exit 1; done
 
+      - name: CXX20 Build
+        run: |
+          export CC=$(which clang-15) && export CXX=$(which clang++-15) && \
+          mkdir build_cxx20 && cd build_cxx20 && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=20 && make
+
+      - name: Debug Build
+        run: |
+          export CC=$(which clang-15) && export CXX=$(which clang++-15) && \
+          mkdir build_cxx17_debug && cd build_cxx17_debug && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=17 && make
+
       - name: CXX14 Build
         run: mkdir build_cxx14 && cd build_cxx14 && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=14 && make
 
       - name: CXX11 Build
         run: mkdir build_cxx11 && cd build_cxx11 && cmake .. -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=11 && make
 
-      - name: Debug Build
-        run: rm -rf build && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Debug && make
-
       - name: Debug Test
-        run: cd build/test && ctest
+        run: cd build_cxx17_debug/test && ctest
 
   BuildAndTestWindows:
     runs-on: windows-latest
@@ -87,7 +104,14 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
+          cmake -DCMAKE_BUILD_TYPE=Release -DCXX_VERSION=17 -G "NMake Makefiles" ..
+          nmake
+
+      - name: CXX20 Build
+        run: |
+          mkdir build_cxx20
+          cd build_cxx20
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=20 -G "NMake Makefiles" ..
           nmake
 
       - name: CXX14 Build
@@ -111,7 +135,7 @@ jobs:
         run: |
           mkdir build_debug
           cd build_debug
-          cmake -DCMAKE_BUILD_TYPE=Debug -G "NMake Makefiles" ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DCXX_VERSION=17 -G "NMake Makefiles" ..
           nmake
 
       - name: Debug Test
