@@ -1613,10 +1613,45 @@ class RBTreeImpl {
 
         void construct_from_nodelist(nodeptr_t head) {
             this->clear();
+            if (head == nullptr) return;
             size_type size = 0;
             for (auto h=head;h!=nullptr;h=h->right,size++) {}
             this->root = head->fromList();
             this->_size = size;
+        }
+
+#if __cplusplus >= 202002
+        template<std::forward_iterator Iter>
+#else
+        template<typename Iter>
+#endif // __cplusplus >= 202002
+        bool construct_from_asc_iter(Iter begin, Iter end) {
+            nodeptr_t head = nullptr, node = nullptr;
+            bool failure = false;
+            for (;begin!=end;begin++) {
+                auto n = this->construct_node(*begin);
+                if (head == nullptr) {
+                    head = n;
+                    node = n;
+                } else {
+                    if (!(rbvalue_compare(this->cmp, node->value, n->value) || (multi && rbvalue_equal(node->value,n->value)))) {
+                        failure = true;
+                        break;
+                    }
+
+                    node->right = n;
+                    node = n;
+                }
+            }
+
+            if (failure) {
+                for (auto n=head;n!=nullptr;n=n->right) {
+                    this->delete_node(n);
+                }
+            } else {
+                this->construct_from_nodelist(head);
+            }
+            return !failure;
         }
 
         RBTreeImpl(): root(nullptr), _version(0), _size(0) {
@@ -2450,6 +2485,15 @@ class generic_container {
         template <typename C2, bool m>
         inline void merge(generic_container<_Key,_Value,m,keep_position_info,C2,Alloc>&& source) {
             this->merge(source);
+        }
+
+#if __cplusplus >= 202002
+        template<std::forward_iterator Iter>
+#else
+        template<typename Iter>
+#endif // __cplusplus >= 202002
+        inline bool emplace_asc(Iter begin, Iter end) {
+            return this->rbtree->construct_from_asc_iter(begin, end);
         }
 
         template <typename C2, bool m>
