@@ -115,7 +115,7 @@ public:
 #if __cplusplus >= 202002
         requires std::constructible_from<K, T1&&, T2&&, Args&&...>
 #endif // __cplusplus >= 202002
-    RBTreeValueK(T1&& k, T2&& v2, Args ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
+    RBTreeValueK(T1&& k, T2&& v2, Args&& ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
 
     RBTreeValueK(const RBTreeValueK&) = default;
     RBTreeValueK(RBTreeValueK&&) = default;
