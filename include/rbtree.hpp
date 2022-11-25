@@ -115,7 +115,7 @@ public:
 #if __cplusplus >= 202002
         requires std::constructible_from<K, T1&&, T2&&, Args&&...>
 #endif // __cplusplus >= 202002
-    RBTreeValueK(T1&& k, T2&& v2, Args ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
+    RBTreeValueK(T1&& k, T2&& v2, Args&& ... args): key(std::forward<T1>(k), std::forward<T2>(v2), std::forward<Args>(args)...) {}
 
     RBTreeValueK(const RBTreeValueK&) = default;
     RBTreeValueK(RBTreeValueK&&) = default;
@@ -757,112 +757,50 @@ class RBTreeImpl {
             this->update_num_nodes(parent, parent->parent);
         }
 
-        inline nodeptr_t right_rotate(nodeptr_t node) {
-            auto node_parent = node->parent;
-            bool left = node_parent && node_parent->left == node;
-
-            auto n6 = node;
-            auto n4 = n6->left, n7 = n6->right;
-            auto n2 = n4->left, n5 = n4->right;
-            auto n1 = n2->left, n3 = n2->right;
-
-            this->be_left_child(n2, n1);
-            this->be_right_child(n2, n3);
-            this->be_left_child(n6, n5);
-            this->be_right_child(n6, n7);
-            this->be_left_child(n4, n2);
-            this->be_right_child(n4, n6);
-
-            n4->parent = node_parent;
-            if (node_parent) {
-                if (left) {
-                    node_parent->left = n4;
-                } else {
-                    node_parent->right = n4;
-                }
-            }
-            return n4;
-        }
-
-        inline nodeptr_t right_left_rotate(nodeptr_t node) {
-            auto node_parent = node->parent;
-            bool left = node_parent && node_parent->left == node;
-
-            auto n6 = node;
-            auto n2 = n6->left, n7 = n6->right;
-            auto n1 = n2->left, n4 = n2->right;
-            auto n3 = n4->left, n5 = n4->right;
-
-            this->be_left_child(n2, n1);
-            this->be_right_child(n2, n3);
-            this->be_left_child(n6, n5);
-            this->be_right_child(n6, n7);
-            this->be_left_child(n4, n2);
-            this->be_right_child(n4, n6);
-
-            n4->parent = node_parent;
-            if (node_parent) {
-                if (left) {
-                    node_parent->left = n4;
-                } else {
-                    node_parent->right = n4;
-                }
-            }
-            return n4;
-        }
-
         inline nodeptr_t left_rotate(nodeptr_t node) {
             auto node_parent = node->parent;
             bool left = node_parent && node_parent->left == node;
 
-            auto n2 = node;
-            auto n1 = n2->left, n4 = n2->right;
-            auto n3 = n4->left, n6 = n4->right;
-            auto n5 = n6->left, n7 = n6->right;
+            auto node_right = node->right;
+            RB_ASSERT(node_right != nullptr);
+            auto node_right_left = node_right->left;
 
-            this->be_left_child(n2, n1);
-            this->be_right_child(n2, n3);
-            this->be_left_child(n6, n5);
-            this->be_right_child(n6, n7);
-            this->be_left_child(n4, n2);
-            this->be_right_child(n4, n6);
+            this->be_right_child(node, node_right_left);
+            this->be_left_child(node_right, node);
 
-            n4->parent = node_parent;
+            node_right->parent = node_parent;
             if (node_parent) {
                 if (left) {
-                    node_parent->left = n4;
+                    node_parent->left = node_right;
                 } else {
-                    node_parent->right = n4;
+                    node_parent->right = node_right;
                 }
             }
-            return n4;
+
+            return node_right;
         }
 
-        inline nodeptr_t left_right_rotate(nodeptr_t node) {
+        inline nodeptr_t right_rotate(nodeptr_t node) {
             auto node_parent = node->parent;
-            bool left = node_parent && node_parent->left == node;
+            bool right = node_parent && node_parent->right == node;
 
-            auto n2 = node;
-            auto n1 = n2->left, n6 = n2->right;
-            auto n4 = n6->left, n7 = n6->right;
-            auto n3 = n4->left, n5 = n4->right;
+            auto node_left = node->left;
+            RB_ASSERT(node_left != nullptr);
+            auto node_left_right = node_left->right;
 
-            this->be_left_child(n2, n1);
-            this->be_right_child(n2, n3);
-            this->be_left_child(n6, n5);
-            this->be_right_child(n6, n7);
-            this->be_left_child(n4, n2);
-            this->be_right_child(n4, n6);
+            this->be_left_child(node, node_left_right);
+            this->be_right_child(node_left, node);
 
-            n4->parent = node_parent;
+            node_left->parent = node_parent;
             if (node_parent) {
-                if (left) {
-                    node_parent->left = n4;
+                if (right) {
+                    node_parent->right = node_left;
                 } else {
-                    node_parent->right = n4;
+                    node_parent->left = node_left;
                 }
             }
-            return n4;
+
+            return node_left;
         }
 
         inline void fix_redred(nodeptr_t node) {
@@ -874,17 +812,21 @@ class RBTreeImpl {
             this->update_num_nodes(p, pp->parent);
 
             for (;!node->black && p && !p->black;) {
-                if (pp->left == p && p->left == node) {
+                if (pp->left == p) {
+                    if (p->right == node) {
+                        p = this->left_rotate(p);
+                    }
+
                     node = this->right_rotate(pp);
                     node->left->black = true;
-                } else if (pp->left == p && p->right == node) {
-                    node = this->right_left_rotate(pp);
-                    node->left->black = true;
-                } else if (pp->right == p && p->right == node) {
+                } else {
+                    RB_ASSERT(pp->right == p);
+
+                    if (p->left == node) {
+                        p = this->right_rotate(p);
+                    }
+
                     node = this->left_rotate(pp);
-                    node->right->black = true;
-                } else if (pp->right == p && p->left == node) {
-                    node = this->left_right_rotate(pp);
                     node->right->black = true;
                 }
 
